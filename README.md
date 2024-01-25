@@ -26,4 +26,4 @@ A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.co
 
 ## Example: [Amazon shareholder letters](https://medium.com/@austenallred/every-amazon-shareholder-letter-as-downloadable-pdf-4eb2ae886018)
 
-![Amazon shareholder letters](images/amazon_shareholder_letters.png)
+<img src="images/amazon_shareholder_letters.png" width="70%">
