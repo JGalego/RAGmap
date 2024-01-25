@@ -23,7 +23,7 @@ A simple Streamlit application that helps visualize document chunks and queries 
 
 Inspired by DeepLearning.ai's short course on 'Advanced Retrieval for AI with Chroma'
 https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/
-and Gabriel Chua's RAGxplorer
+and Gabriel Chua's award-winning RAGxplorer
 https://github.com/gabrielchua/RAGxplorer/
 """
 
@@ -334,7 +334,7 @@ st.title("RAGMap 🗺️🔍")
 st.text("Visualize document chunks and queries in embedding space")
 
 # Initialize session state
-for key in ["collection", "documents", "projections", "query_projections"]:
+for key in ["collection", "documents", "projections", "query_projections", "retrieved_ids"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
@@ -474,6 +474,7 @@ if st.session_state.projections is not None:
             n_results=n_results,
             include=['documents', 'embeddings']
         )
+
         st.session_state.retrieved_ids = []
         for ids in results['ids']:
             st.session_state.retrieved_ids.extend(ids)
@@ -487,7 +488,6 @@ if st.session_state.projections is not None:
     plot_projections(df)
 
     if st.session_state.retrieved_ids is not None:
-        print(st.session_state.retrieved_ids)
         st.dataframe(
             df[df['category'] == "retrieved"].drop(['category'], axis=1),
             use_container_width=True,

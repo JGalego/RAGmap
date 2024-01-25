@@ -4,15 +4,13 @@
 
 A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.com/bedrock/) that helps visualize document chunks and queries in embedding space.
 
-> Inspired by DeepLearning.ai's short course on [Advanced Retrieval for AI with Chroma](https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/) and Gabriel Chua's [RAGxplorer](https://github.com/gabrielchua/RAGxplorer).
+> Inspired by DeepLearning.ai's short course on [Advanced Retrieval for AI with Chroma](https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/) and Gabriel Chua's award-winning [RAGxplorer](https://github.com/gabrielchua/RAGxplorer).
 
 <img src="images/ragmap.png" width="50%">
 
 ## How to use
 
 ### Option 1 💻
-
-0. Clone this repository
 
 1. Install dependencies
 
@@ -29,7 +27,7 @@ A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.co
 
 ### Option 2 🐳
 
-1. Run the command
+1. Run the following command to start the service
 
 	```
 	docker-compose up
