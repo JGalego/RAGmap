@@ -1,0 +1,10 @@
+boto3
+chromadb
+langchain
+numpy
+pandas
+plotly
+PyPDF2
+sentence-transformers
+streamlit
+umap-learn
