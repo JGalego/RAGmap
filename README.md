@@ -6,7 +6,7 @@ A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.co
 
 > Inspired by DeepLearning.ai's short course on [Advanced Retrieval for AI with Chroma](https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/) and Gabriel Chua's [RAGxplorer](https://github.com/gabrielchua/RAGxplorer).
 
-![RAGmap](images/ragmap.png)
+<img src="images/ragmap.png" width="50%">
 
 ## How to use
 
