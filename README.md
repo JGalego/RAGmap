@@ -10,6 +10,8 @@ A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.co
 
 ## How to use
 
+### Option 1 💻
+
 0. Clone this repository
 
 1. Install dependencies
@@ -24,6 +26,17 @@ A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.co
 	streamlit run app.py
 	```
 
+
+### Option 2 🐳
+
+1. Run the command
+
+	```
+	docker-compose up
+	```
+
+2. Once the container is up and running, head over to http://localhost:8501
+
 ## Example: [Amazon shareholder letters](https://medium.com/@austenallred/every-amazon-shareholder-letter-as-downloadable-pdf-4eb2ae886018)
 
-![Amazon shareholder letters](images/amazon_shareholder_letters.png)
+<img src="images/amazon_shareholder_letters.png" width="70%">
