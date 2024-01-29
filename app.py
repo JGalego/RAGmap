@@ -55,8 +55,6 @@ from langchain_community.chat_models import BedrockChat
 
 from langchain_core.output_parsers import StrOutputParser
 
-from PyPDF2 import PdfReader
-
 #############
 # Constants #
 #############
@@ -116,12 +114,21 @@ def list_text_models():
         byOutputModality='TEXT')['modelSummaries']
 
 
-def read_pdf(filename):
+def process_document(filename):
     """
-    Loads and extracts text from a PDF document
+    Loads and extracts text from a document
     """
-    doc = PdfReader(filename)
-    texts = [p.extract_text().strip() for p in doc.pages]
+    # PDF
+    if filename.type == "application/pdf":
+        from PyPDF2 import PdfReader
+        doc = PdfReader(filename)
+        texts = [p.extract_text().strip() for p in doc.pages]
+    # DOCX
+    elif filename.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        from docx import Document
+        doc = Document(filename)
+        texts = [paragraph.text for paragraph in doc.paragraphs]
+
     # Filter the empty strings
     texts = [text for text in texts if text]
     return texts
@@ -146,7 +153,7 @@ def build_collection():
     """
     # Load and extract text from PDF document
     with st.spinner("Loading document"):
-        texts = read_pdf(uploaded_file)
+        texts = process_document(uploaded_file)
 
     # Split text into chunks
     with st.spinner("Splitting text into chunks"):
@@ -350,7 +357,7 @@ st.markdown("### 1. Upload a document 📄")
 uploaded_file = st.file_uploader(
     label="Upload a file",
     label_visibility="hidden",
-    type="pdf",
+    type=["pdf", "docx"],
 )
 
 st.markdown("### 2. Build a vector database 💫")
@@ -359,7 +366,7 @@ chunk_size = st.number_input(
     label="Chunk Size",
     min_value=1,
     max_value=2000,
-    value=1000,
+    value=256,
     step=1,
     key="chunk_size",
     help="Number of tokens in each chunk",

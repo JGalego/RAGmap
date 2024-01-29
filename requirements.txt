@@ -4,6 +4,7 @@ langchain
 numpy
 pandas
 plotly
+python-docx
 PyPDF2
 streamlit
 umap-learn
