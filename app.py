@@ -27,6 +27,7 @@ and Gabriel Chua's award-winning RAGxplorer
 https://github.com/gabrielchua/RAGxplorer/
 """
 
+import io
 import json
 import uuid
 
@@ -310,7 +311,8 @@ def plot_projections(df_projs):
 		}
     )
 
-    return st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
+    return fig
 
 
 def multiple_queries_expansion(user_query, df_query_original, model_id='anthropic.claude-v2:1'):
@@ -443,7 +445,7 @@ embedding_model = st.selectbox(
     label="Embedding Model",
     options=list_embedding_models(),
     index=0,
-    format_func=lambda option: f"{option['modelName']}",
+    format_func=lambda option: f"{option['modelName']} ({option['modelId']})",
     key="embedding_model",
     help="The model used to encapsulate information \
         into dense representations in a multi-dimensional space",
@@ -563,9 +565,23 @@ if st.session_state.projections is not None:
         df = pd.concat([df, df_query], axis=0)
 
     # Display all projections
-    plot_projections(df)
+    st.markdown("#### Projections")
+    fig = plot_projections(df)
+    buffer = io.StringIO()
+    fig.write_html(buffer, include_plotlyjs="cdn")
+    html_bytes = buffer.getvalue().encode()
+
+    # Download plot as HTML
+    st.download_button(
+        label="Download HTML",
+        data=html_bytes,
+        file_name=f"{uploaded_file.name.split('.')[0]}.html",
+        mime="text/html",
+    )
 
     if st.session_state.retrieved_ids is not None:
+        # Display query results
+        st.markdown("#### Results")
         st.dataframe(
             df[df['category'] == "retrieved"].drop(['category'], axis=1),
             use_container_width=True,
@@ -579,4 +595,12 @@ if st.session_state.projections is not None:
                     width="large"
                 )
             },
+        )
+
+        # Download query results as CSV
+        st.download_button(
+            label="Download CSV",
+            data=df.to_csv(),
+            file_name=f"results.csv",
+            mime="text/csv",
         )
