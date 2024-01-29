@@ -59,6 +59,7 @@ from langchain_core.output_parsers import StrOutputParser
 # Constants #
 #############
 
+# 2D
 plot_settings = {
     'chunk': {
         'color': 'blue',
@@ -92,6 +93,40 @@ plot_settings = {
     },
 }
 
+# 3D
+plot3d_settings = {
+    'chunk': {
+        'color': 'blue',
+        'opacity': 0.5,
+        'symbol': 'circle',
+        'size': 10,
+    },
+    'query': {
+        'color': 'red',
+        'opacity': 1,
+        'symbol': 'circle',
+        'size': 15,
+    },
+    'retrieved': {
+        'color': 'green',
+        'opacity': 1,
+        'symbol': 'diamond',
+        'size': 10,
+    },
+    'sub-query': {
+        'color': 'purple',
+        'opacity': 1,
+        'symbol': 'square',
+        'size': 10,
+    },
+    'hypothetical answer': {
+        'color': 'purple',
+        'opacity': 1,
+        'symbol': 'square',
+        'size': 10,
+    },
+}
+
 ################
 # Helper Utils #
 ################
@@ -120,12 +155,12 @@ def process_document(filename):
     """
     # PDF
     if filename.type == "application/pdf":
-        from PyPDF2 import PdfReader
+        from PyPDF2 import PdfReader  # pylint: disable=import-outside-toplevel
         doc = PdfReader(filename)
         texts = [p.extract_text().strip() for p in doc.pages]
     # DOCX
     elif filename.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        from docx import Document
+        from docx import Document  # pylint: disable=import-outside-toplevel
         doc = Document(filename)
         texts = [paragraph.text for paragraph in doc.paragraphs]
 
@@ -188,9 +223,7 @@ def project_embeddings(embeddings, umap_transform):
     """
     Projects text embeddings using a umap transform
     """
-    umap_embeddings = np.empty((len(embeddings), 2))
-    # for i, embedding in enumerate(embeddings):
-    #     umap_embeddings[i] = umap_transform.transform([embedding])
+    umap_embeddings = np.empty((len(embeddings), umap_transform.n_components))
     umap_embeddings = umap_transform.transform(embeddings)
     return umap_embeddings
 
@@ -211,7 +244,7 @@ def create_projections():
     # Fit umap transformer to embeddings
     with st.spinner("Fitting umap to embeddings"):
         umap_transform = umap.UMAP(
-            random_state=0, transform_seed=0
+            random_state=0, transform_seed=0, n_components=n_components
         ).fit(st.session_state.embeddings)
         st.session_state.umap_transform = umap_transform
 
@@ -227,9 +260,10 @@ def plot_projections(df_projs):
     fig = go.Figure()
     for category in df['category'].unique():
         df_cat = df_projs[df_projs['category'] == category]
-        category_settings = plot_settings[category]
-        fig.add_trace(
-            go.Scatter(
+        # 2D
+        if n_components == 2:
+            category_settings = plot_settings[category]
+            trace = go.Scatter(
                 x=df_cat['x'],
                 y=df_cat['y'],
                 mode='markers',
@@ -244,16 +278,35 @@ def plot_projections(df_projs):
                 hoverinfo='text',
                 text=df_cat['document_cleaned']
             )
-        )
+        # 3D
+        elif n_components == 3:
+            category_settings = plot3d_settings[category]
+            trace = go.Scatter3d(
+                x=df_cat['x'],
+                y=df_cat['y'],
+                z=df_cat['z'],
+                mode="markers",
+                name=category,
+                marker={
+                    'color': category_settings['color'],
+                    'opacity': category_settings['opacity'],
+                    'symbol': category_settings['symbol'],
+                    'size': category_settings['size'],
+                    'line_width': 0
+				},
+                hoverinfo='text',
+                text=df_cat['document_cleaned']
+            )
+
+        fig.add_trace(trace)
 
     fig.update_layout(
-        height=500,
         legend={
-			"x": 0.5,
-            "y": 100,
-            "xanchor": "center",
-            "yanchor": "top",
-            "orientation": "h"
+			'x': 0.5,
+            'y': 100,
+            'xanchor': "center",
+            'yanchor': "top",
+            'orientation': "h"
 		}
     )
 
@@ -275,18 +328,20 @@ def multiple_queries_expansion(user_query, df_query_original, model_id='anthropi
     output = chain.invoke({"user_query": user_query})
     try:
         st.session_state.query_expansions = list(json.loads(output).values())
-        st.session_state.query_expansion_projections = [
+        st.session_state.query_expansion_projections = np.array([
             project_embeddings(
                 get_embeddings(expansion),
                 st.session_state.umap_transform
             ) for expansion in st.session_state.query_expansions
-        ]
+        ])
 
         df_query_expansions = pd.DataFrame({
-            "x": [projection[0][0] for projection in st.session_state.query_expansion_projections],
-            "y": [projection[0][1] for projection in st.session_state.query_expansion_projections],
-            "document_cleaned": st.session_state.query_expansions,
-            "category": ["sub-query"] * len(st.session_state.query_expansions),
+            'x': st.session_state.query_expansion_projections[:, 0, 0],
+            'y': st.session_state.query_expansion_projections[:, 0, 1],
+            'z': st.session_state.query_expansion_projections[:, 0, 2] \
+                    if n_components == 3 else None,
+            'document_cleaned': st.session_state.query_expansions,
+            'category': ["sub-query"] * len(st.session_state.query_expansions),
         })
 
         df_query_expanded = pd.concat([df_query_original, df_query_expansions])
@@ -311,26 +366,28 @@ def generated_answer_expansion(user_query, df_query_original, model_id='anthropi
     output = chain.invoke({"user_query": user_query})
     try:
         st.session_state.query_expansions = [output]
-        st.session_state.query_expansion_projections = [
+        st.session_state.query_expansion_projections = np.array([
             project_embeddings(
                 get_embeddings(expansion),
                 st.session_state.umap_transform
             ) for expansion in st.session_state.query_expansions
-        ]
+        ])
 
         df_query_expansions = pd.DataFrame({
-            "x": [projection[0][0] for projection in st.session_state.query_expansion_projections],
-            "y": [projection[0][1] for projection in st.session_state.query_expansion_projections],
-            "document_cleaned": [
+            'x': st.session_state.query_expansion_projections[:, 0, 0],
+            'y': st.session_state.query_expansion_projections[:, 0, 1],
+            'z': st.session_state.query_expansion_projections[:, 0, 2] \
+                    if n_components == 3 else None,
+            'document_cleaned': [
                 "<br>".join(wrap(doc, 100)) for doc in st.session_state.query_expansions
             ],
-            "category": ["hypothetical answer"] * len(st.session_state.query_expansions),
+            'category': ["hypothetical answer"] * len(st.session_state.query_expansions),
         })
 
         df_query_expanded = pd.concat([df_query_original, df_query_expansions])
         return st.session_state.query_expansions, df_query_expanded
     except json.decoder.JSONDecodeError:
-        st.warning("Model failed to expand query, falling back to Naive approach!")
+        st.warning("Model failed to expand query, falling back to the naive approach!")
         return [user_query], df_query_original
 
 ########
@@ -392,6 +449,16 @@ embedding_model = st.selectbox(
         into dense representations in a multi-dimensional space",
 )
 
+# For more information, see
+# https://umap-learn.readthedocs.io/en/latest/parameters.html#n-components
+n_components = st.radio(
+    label="UMAP Components",
+    options=[2, 3],
+    index=0,
+    key="n_components",
+    help="The dimensionality of the reduced dimension space",
+)
+
 if embedding_model is not None:
     st.session_state.embedding_function = AmazonBedrockEmbeddingFunction(
         session=session,
@@ -414,10 +481,14 @@ if st.session_state.projections is not None:
 
     st.markdown("### 3. Explore the embedding space 🖼️")
 
+    if len(st.session_state.projections[0]) != n_components:
+        create_projections()
+
     df = pd.DataFrame({
         'id': [int(id) for id in st.session_state.ids],
         'x': st.session_state.projections[:, 0],
         'y': st.session_state.projections[:, 1],
+        'z': st.session_state.projections[:, 2] if n_components == 3 else None,
         'document_cleaned': [
             "<br>".join(wrap(doc, 100))
                 for doc in st.session_state.documents
@@ -460,16 +531,16 @@ if st.session_state.projections is not None:
             st.session_state.umap_transform
         )
         df_query = pd.DataFrame({
-            "x": st.session_state.query_projections[:, 0],
-            "y": st.session_state.query_projections[:, 1],
-            "document_cleaned": query,
-            "category": "query",
+            'x': st.session_state.query_projections[:, 0],
+            'y': st.session_state.query_projections[:, 1],
+            'z': st.session_state.query_projections[:, 2] if n_components == 3 else None,
+            'document_cleaned': query,
+            'category': "query",
         })
 
-        # Use the query as is
+        # Use the query as is or expand it
         if retrieval_strategy == "Naive":
             chroma_query = query
-        # or expand it
         elif retrieval_strategy == "Multiple Queries":
             chroma_query, df_query = multiple_queries_expansion(query, df_query)
         elif retrieval_strategy == "Generated Answer":
@@ -486,7 +557,7 @@ if st.session_state.projections is not None:
         for ids in results['ids']:
             st.session_state.retrieved_ids.extend(ids)
         st.session_state.retrieved_ids = map(int, st.session_state.retrieved_ids)
-        df.loc[df['id'].isin(st.session_state.retrieved_ids), "category"] = "retrieved"
+        df.loc[df['id'].isin(st.session_state.retrieved_ids), 'category'] = "retrieved"
 
         # Append query projections
         df = pd.concat([df, df_query], axis=0)
@@ -500,10 +571,10 @@ if st.session_state.projections is not None:
             use_container_width=True,
             hide_index=True,
             column_config={
-                "x": st.column_config.NumberColumn(
+                'x': st.column_config.NumberColumn(
                     width="small"
                 ),
-                "document_cleaned": st.column_config.TextColumn(
+                'document_cleaned': st.column_config.TextColumn(
                     "chunk",
                     width="large"
                 )
