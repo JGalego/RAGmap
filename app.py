@@ -269,11 +269,11 @@ def plot_projections(df_projs):
                 mode='markers',
                 name=category,
                 marker={
-                    "color": category_settings['color'],
-                    "opacity": category_settings['opacity'],
-                    "symbol": category_settings['symbol'],
-                    "size": category_settings['size'],
-                    "line_width": 0
+                    'color': category_settings['color'],
+                    'opacity': category_settings['opacity'],
+                    'symbol': category_settings['symbol'],
+                    'size': category_settings['size'],
+                    'line_width': 0
 				},
                 hoverinfo='text',
                 text=df_cat['document_cleaned']
