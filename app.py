@@ -35,7 +35,6 @@ from textwrap import wrap
 
 import boto3
 import chromadb
-import umap
 
 import numpy as np
 import pandas as pd
@@ -55,6 +54,10 @@ from langchain.text_splitter import (
 from langchain_community.chat_models import BedrockChat
 
 from langchain_core.output_parsers import StrOutputParser
+
+from openTSNE import TSNE
+
+from umap import UMAP
 
 #############
 # Constants #
@@ -220,38 +223,46 @@ def get_embeddings(text):
     return text_embeddings
 
 
-def project_embeddings(embeddings, umap_transform):
+def project_embeddings(embeddings, transform):
     """
-    Projects text embeddings using a umap transform
+    Projects text embeddings using a transform
     """
-    umap_embeddings = np.empty((len(embeddings), umap_transform.n_components))
-    umap_embeddings = umap_transform.transform(embeddings)
-    return umap_embeddings
+    projs = np.empty((len(embeddings), n_components))
+    projs = transform.transform(embeddings)
+    return projs
 
 
 def create_projections():
     """
-    Transforms document embeddings into umap projections
+    Transforms document embeddings into projections
     """
+    if st.session_state.collection is None:
+        return
+
     # Get documents and embeddings
     with st.spinner("Retrieving document and embeddings"):
         res = st.session_state.collection.get(
             include=['documents', 'embeddings']
         )
         st.session_state.ids = res['ids']
-        st.session_state.embeddings = res['embeddings']
+        st.session_state.embeddings = np.array(res['embeddings'])
         st.session_state.documents = res['documents']
 
-    # Fit umap transformer to embeddings
-    with st.spinner("Fitting umap to embeddings"):
-        umap_transform = umap.UMAP(
-            random_state=0, transform_seed=0, n_components=n_components
-        ).fit(st.session_state.embeddings)
-        st.session_state.umap_transform = umap_transform
+    # Fit projection transform
+    with st.spinner("Fitting embeddings"):
+        if st.session_state.projection_algo == "UMAP":
+            transform = UMAP(
+                random_state=0, transform_seed=0, n_components=st.session_state.n_components
+            ).fit(st.session_state.embeddings)
+        elif st.session_state.projection_algo == "t-SNE":
+            transform = TSNE(
+                random_state=0, n_components=st.session_state.n_components
+            ).fit(st.session_state.embeddings)
+        st.session_state.transform = transform
 
     # Get projections
     with st.spinner("Generating projections"):
-        st.session_state.projections = umap_transform.transform(st.session_state.embeddings)
+        st.session_state.projections = transform.transform(st.session_state.embeddings)
 
 
 def plot_projections(df_projs):
@@ -333,7 +344,7 @@ def multiple_queries_expansion(user_query, df_query_original, model_id='anthropi
         st.session_state.query_expansion_projections = np.array([
             project_embeddings(
                 get_embeddings(expansion),
-                st.session_state.umap_transform
+                st.session_state.transform
             ) for expansion in st.session_state.query_expansions
         ])
 
@@ -375,7 +386,7 @@ def generated_answer_expansion(user_query, df_query_original, model_id='anthropi
         st.session_state.query_expansion_projections = np.array([
             project_embeddings(
                 get_embeddings(expansion),
-                st.session_state.umap_transform
+                st.session_state.transform
             ) for expansion in st.session_state.query_expansions
         ])
 
@@ -425,6 +436,8 @@ uploaded_file = st.file_uploader(
 
 st.markdown("### 2. Build a vector database 💫")
 
+st.markdown("#### Chunking Strategy")
+
 chunk_size = st.number_input(
     label="Chunk Size",
     min_value=1,
@@ -455,12 +468,31 @@ embedding_model = st.selectbox(
         into dense representations in a multi-dimensional space",
 )
 
+st.markdown("#### Dimensionality Reduction")
+
+projection_algo = st.radio(
+    label="Projection Algorithm",
+    options=["UMAP", "t-SNE"],
+    captions=[
+        "Uniform Manifold Approximation and Projection",
+        "t-distributed stochastic neighbor embedding"
+    ],
+    horizontal=True,
+    index=0,
+    on_change=create_projections(),
+    key="projection_algo",
+    help="The algorithm used for dimensionality reduction",
+)
+
 # For more information, see
 # https://umap-learn.readthedocs.io/en/latest/parameters.html#n-components
+# https://opentsne.readthedocs.io/en/stable/api/index.html#openTSNE.TSNE
 n_components = st.radio(
-    label="UMAP Components",
+    label="Projection Components",
     options=[2, 3],
+    horizontal=True,
     index=0,
+    on_change=create_projections(),
     key="n_components",
     help="The dimensionality of the reduced dimension space",
 )
@@ -481,14 +513,9 @@ if st.button(label="Build"):
         if st.session_state.projections is None:
             create_projections()
 
-        st.success("Vector database created!")
-
 if st.session_state.projections is not None:
 
     st.markdown("### 3. Explore the embedding space 🖼️")
-
-    if len(st.session_state.projections[0]) != n_components:
-        create_projections()
 
     df = pd.DataFrame({
         'id': [int(id) for id in st.session_state.ids],
@@ -534,7 +561,7 @@ if st.session_state.projections is not None:
         # Get query projections
         st.session_state.query_projections = project_embeddings(
             get_embeddings(query),
-            st.session_state.umap_transform
+            st.session_state.transform
         )
         df_query = pd.DataFrame({
             'x': st.session_state.query_projections[:, 0],
