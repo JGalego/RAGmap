@@ -10,21 +10,31 @@ A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.co
 
 ## Features
 
-* Support for multiple document formats
+* Supports multiple document formats
 	- `PDF`
 	- `DOCX`
-* Support for multiple models via Amazon Bedrock
+* Supports multiple models via Amazon Bedrock
 	- Titan Text Embeddings
 	- Titan Multimodal Embeddings
 	- Cohere Embed English (*)
 	- Cohere Embed Multilingual (*)
-* Generate 2D and 3D UMAP projection plots
-* Download plots as HTML
-* Download query results as CSV
+* Generates 2D and 3D UMAP projection plots
+* Runs queries using natural language
+* Supports advanced retrieval techniques (HyDE, Multi Qns)
+* Exports plots as HTML
+* Exports query results as CSV
 
 (*) ☝️ **Important notice:** As of January 2024, chromadb's `AmazonBedrockEmbeddingFunction` only works with Titan models. Feel free to upvote this [PR](https://github.com/chroma-core/chroma/pull/1675) to add support for [Cohere Embed models](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html).
 
 ## How to use
+
+### Prerequisites
+
+Enable access to the embedding ([Titan Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html), [Cohere Embed](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html)) and text ([Anthropic Claude](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-claude.html)) models via Amazon Bedrock.
+
+> For more information on how to request model access, please refer to the [Amazon Bedrock User Guide](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html) (**Set up > Model access**)
+
+<img src="images/bedrock_model_access.png" width="75%"/>
 
 ### Option 1 💻
 

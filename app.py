@@ -165,14 +165,14 @@ def process_document(filename):
         doc = Document(filename)
         texts = [paragraph.text for paragraph in doc.paragraphs]
 
-    # Filter the empty strings
+    # Filter out empty strings
     texts = [text for text in texts if text]
     return texts
 
 
 def chunk_texts(texts):
     """
-    Turns input texts into chunks
+    Breaks down input texts into chunks
     """
     character_splitter = RecursiveCharacterTextSplitter(
         separators=["\n\n", "\n", ". ", " ", ""],
@@ -185,7 +185,7 @@ def chunk_texts(texts):
 
 def build_collection():
     """
-    Creates and populates a chroma collection
+    Creates and populates a Chroma collection
     """
     # Load and extract text from PDF document
     with st.spinner("Loading document"):
@@ -256,7 +256,7 @@ def create_projections():
 
 def plot_projections(df_projs):
     """
-    Generates a plot of embedding projections
+    Generates a 2D or 3D plot of embedding projections
     """
     fig = go.Figure()
     for category in df['category'].unique():
@@ -356,6 +356,10 @@ def multiple_queries_expansion(user_query, df_query_original, model_id='anthropi
 def generated_answer_expansion(user_query, df_query_original, model_id='anthropic.claude-v2:1'):
     """
     Expands a user query by generating an hypothetical answer
+
+    References:
+    + (Gao et al., 2022) Precise Zero-Shot Dense Retrieval without Relevance Labels
+    https://paperswithcode.com/paper/precise-zero-shot-dense-retrieval-without
     """
     system_msg = "Given a query, your task is to generate a template for the hypothetical answer. Do not include any facts, and instead label them as <PLACEHOLDER>. Skip the preamble."  # pylint: disable=line-too-long
     prompt = ChatPromptTemplate.from_messages([
