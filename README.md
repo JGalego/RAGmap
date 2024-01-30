@@ -18,7 +18,9 @@ A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.co
 	- Titan Multimodal Embeddings
 	- Cohere Embed English (*)
 	- Cohere Embed Multilingual (*)
-* Generates 2D and 3D UMAP projection plots
+* Generates 2D and 3D projection plots
+	- UMAP
+	- t-SNE (experimental)
 * Runs queries using natural language
 * Supports advanced retrieval techniques (HyDE, Multi Qns)
 * Exports plots as HTML
