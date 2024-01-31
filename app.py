@@ -29,6 +29,7 @@ https://github.com/gabrielchua/RAGxplorer/
 
 import io
 import json
+import os
 import uuid
 
 from textwrap import wrap
@@ -283,7 +284,12 @@ def build_collection():
 
     # Create and populate chroma collection
     with st.spinner("Creating collection"):
-        chroma_client = chromadb.Client()
+        if os.path.exists("embeddings"):
+            # Initialize a persistent chroma client
+            # https://docs.trychroma.com/usage-guide#initiating-a-persistent-chroma-client
+            chroma_client = chromadb.PersistentClient("embeddings")
+        else:
+            chroma_client = chromadb.Client()
         document_name = uuid.uuid4().hex
         collection = chroma_client.create_collection(
             document_name,
