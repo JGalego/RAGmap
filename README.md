@@ -13,18 +13,21 @@ A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.co
 * Supports multiple document formats
 	- `PDF`
 	- `DOCX`
+	- `PPTX`
 * Supports multiple models via Amazon Bedrock
-	- Titan Text Embeddings
-	- Titan Multimodal Embeddings
-	- Cohere Embed English (*)
-	- Cohere Embed Multilingual (*)
+	- [Titan Text Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html)
+	- [Titan Multimodal Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-multiemb-models.html)
+	- [Cohere Embed English](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html) (*)
+	- [Cohere Embed Multilingual](https://aws.amazon.com/blogs/aws/amazon-bedrock-now-provides-access-to-cohere-command-light-and-cohere-embed-english-and-multilingual-models/) (*)
 * Generates 2D and 3D projection plots
-	- UMAP
-	- t-SNE (experimental)
+	- [UMAP](https://umap-learn.readthedocs.io/en/latest/)
+	- [t-SNE](https://opentsne.readthedocs.io/en/stable/) (experimental 🧪)
 * Runs queries using natural language
-* Supports advanced retrieval techniques (HyDE, Multi Qns)
-* Exports plots as HTML
-* Exports query results as CSV
+* Support for advanced retrieval techniques
+	- HyDE
+	- Multi Qns
+* Export plots as HTML
+* Export query results as CSV
 
 (*) ☝️ **Important notice:** As of January 2024, chromadb's `AmazonBedrockEmbeddingFunction` only works with Titan models. Feel free to upvote this [PR](https://github.com/chroma-core/chroma/pull/1675) to add support for [Cohere Embed models](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html).
 

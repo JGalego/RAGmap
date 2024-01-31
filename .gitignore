@@ -1,4 +1,7 @@
 *.pdf
 *.doc
 *.docx
+*.ppt
+*.pptx
 embeddings
+__pycache__
