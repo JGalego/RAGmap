@@ -21,7 +21,8 @@ A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.co
 	- [Cohere Embed Multilingual](https://aws.amazon.com/blogs/aws/amazon-bedrock-now-provides-access-to-cohere-command-light-and-cohere-embed-english-and-multilingual-models/) (*)
 * Generates 2D and 3D projection plots
 	- [UMAP](https://umap-learn.readthedocs.io/en/latest/)
-	- [t-SNE](https://opentsne.readthedocs.io/en/stable/) (experimental 🧪)
+	- [t-SNE](https://opentsne.readthedocs.io/en/stable/)
+	- [PCA](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html)
 * Runs queries using natural language
 * Support for advanced retrieval techniques
 	- HyDE

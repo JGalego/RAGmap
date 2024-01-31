@@ -8,5 +8,6 @@ plotly
 python-docx
 python-pptx
 PyPDF2
+scikit-learn
 streamlit
 umap-learn

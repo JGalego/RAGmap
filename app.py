@@ -58,6 +58,8 @@ from langchain_core.output_parsers import StrOutputParser
 
 from openTSNE import TSNE
 
+from sklearn.decomposition import PCA
+
 from umap import UMAP
 
 #############
@@ -347,6 +349,10 @@ def create_projections():
             transform = TSNE(
                 random_state=0, n_components=st.session_state.n_components
             ).fit(st.session_state.embeddings)
+        elif st.session_state.dim_redux == "PCA":
+            transform = PCA(
+                random_state=0, n_components=st.session_state.n_components
+            ).fit(st.session_state.embeddings)
         st.session_state.transform = transform
 
     # Get projections
@@ -559,10 +565,15 @@ st.markdown(model2table(embedding_model), unsafe_allow_html=True)
 
 dim_redux = st.radio(
     label="Dimensionality Reduction",
-    options=["UMAP", "t-SNE"],
+    options=[
+        "UMAP",
+        "t-SNE",
+        "PCA"
+    ],
     captions=[
         "Uniform Manifold Approximation and Projection",
-        "t-distributed Stochastic Neighbor Embedding"
+        "t-distributed Stochastic Neighbor Embedding",
+        "Principal Component Analysis"
     ],
     horizontal=True,
     index=0,
