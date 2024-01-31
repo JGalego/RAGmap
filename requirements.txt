@@ -6,6 +6,7 @@ opentsne
 pandas
 plotly
 python-docx
+python-pptx
 PyPDF2
 streamlit
 umap-learn

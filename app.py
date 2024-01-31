@@ -155,6 +155,7 @@ def list_text_models():
     return bedrock.list_foundation_models(
         byOutputModality='TEXT')['modelSummaries']
 
+
 st.cache_data()
 def model2table(model):
     """
@@ -232,15 +233,23 @@ def process_document(filename):
     Loads and extracts text from a document
     """
     # PDF
-    if filename.type == "application/pdf":
+    mime_type = filename.type
+    if mime_type == "application/pdf":
         from PyPDF2 import PdfReader  # pylint: disable=import-outside-toplevel
         doc = PdfReader(filename)
         texts = [p.extract_text().strip() for p in doc.pages]
     # DOCX
-    elif filename.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    elif mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         from docx import Document  # pylint: disable=import-outside-toplevel
         doc = Document(filename)
         texts = [paragraph.text for paragraph in doc.paragraphs]
+    # PPTX
+    elif mime_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+        from pptx import Presentation  # pylint: disable=import-outside-toplevel
+        doc = Presentation(filename)
+        texts = [shape.text for slide in doc.slides \
+                                for shape in slide.shapes \
+                                    if hasattr(shape, "text")]
 
     # Filter out empty strings
     texts = [text for text in texts if text]
@@ -505,7 +514,7 @@ st.markdown("### 1. Upload a document 📄")
 uploaded_file = st.file_uploader(
     label="Upload a file",
     label_visibility="hidden",
-    type=["pdf", "docx"],
+    type=["pdf", "docx", "pptx"],
 )
 
 st.markdown("### 2. Build a vector database 💫")
