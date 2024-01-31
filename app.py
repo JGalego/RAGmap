@@ -140,8 +140,11 @@ def list_embedding_models():
     """
     Returns a list of embedding models available in Amazon Bedrock
     """
-    return bedrock.list_foundation_models(
-        byOutputModality='EMBEDDING')['modelSummaries']
+    # Filter out provisioned throughput only models
+    # https://docs.aws.amazon.com/bedrock/latest/userguide/prov-throughput-models.html
+    return [model for model in bedrock.list_foundation_models(
+                                    byOutputModality='EMBEDDING')['modelSummaries'] \
+                                        if model['inferenceTypesSupported'] != ["PROVISIONED"]]
 
 
 st.cache_data()
@@ -151,6 +154,77 @@ def list_text_models():
     """
     return bedrock.list_foundation_models(
         byOutputModality='TEXT')['modelSummaries']
+
+st.cache_data()
+def model2table(model):
+    """
+    Turns a model summary into a table
+    """
+    model_status = model['modelLifecycle']['status']
+    model_status = "✅" if model_status == "ACTIVE" else "👴" if model_status == "LEGACY" else "❓"
+
+    input_modalities = model['inputModalities']
+    input_modalities = "".join(
+        map(
+            lambda inp: "💬" if inp == "TEXT" else "🖼️" if inp == "IMAGE" else "❓",
+            input_modalities
+        )
+    )
+
+    return f"""
+<table style="margin: 0px auto;">
+    <tr>
+        <td>
+            <b>Model ID</b>
+        </td>
+        <td>
+            <tt>{model['modelId']}</tt>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <b>Model Name</b>
+        </td>
+        <td>
+            {model['modelName']}
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <b>Input Modalities</b>
+        </td>
+        <td>
+            {input_modalities}
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <b>Output Modalities</b>
+        </td>
+        <td>
+            {", ".join(model['outputModalities'])}
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <b>Inference Types</b>
+        </td>
+        <td>
+            {", ".join(model['inferenceTypesSupported'])}
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <b>Model Lifecycle</b>
+        </td>
+        <td>
+            {model_status}
+        </td>
+    </tr>
+</table>
+
+#####
+"""
 
 
 def process_document(filename):
@@ -250,11 +324,11 @@ def create_projections():
 
     # Fit projection transform
     with st.spinner("Fitting embeddings"):
-        if st.session_state.projection_algo == "UMAP":
+        if st.session_state.dim_redux == "UMAP":
             transform = UMAP(
                 random_state=0, transform_seed=0, n_components=st.session_state.n_components
             ).fit(st.session_state.embeddings)
-        elif st.session_state.projection_algo == "t-SNE":
+        elif st.session_state.dim_redux == "t-SNE":
             transform = TSNE(
                 random_state=0, n_components=st.session_state.n_components
             ).fit(st.session_state.embeddings)
@@ -436,8 +510,6 @@ uploaded_file = st.file_uploader(
 
 st.markdown("### 2. Build a vector database 💫")
 
-st.markdown("#### Chunking Strategy")
-
 chunk_size = st.number_input(
     label="Chunk Size",
     min_value=1,
@@ -468,20 +540,20 @@ embedding_model = st.selectbox(
         into dense representations in a multi-dimensional space",
 )
 
-st.markdown("#### Dimensionality Reduction")
+st.markdown(model2table(embedding_model), unsafe_allow_html=True)
 
-projection_algo = st.radio(
-    label="Projection Algorithm",
+dim_redux = st.radio(
+    label="Dimensionality Reduction",
     options=["UMAP", "t-SNE"],
     captions=[
         "Uniform Manifold Approximation and Projection",
-        "t-distributed stochastic neighbor embedding"
+        "t-distributed Stochastic Neighbor Embedding"
     ],
     horizontal=True,
     index=0,
     on_change=create_projections(),
-    key="projection_algo",
-    help="The algorithm used for dimensionality reduction",
+    key="dim_redux",
+    help="The algorithm or technique used for dimensionality reduction",
 )
 
 # For more information, see
@@ -492,9 +564,10 @@ n_components = st.radio(
     options=[2, 3],
     horizontal=True,
     index=0,
+    format_func=lambda option: f"{option}D",
     on_change=create_projections(),
     key="n_components",
-    help="The dimensionality of the reduced dimension space",
+    help="The dimensionality of the reduced embedding space",
 )
 
 if embedding_model is not None:
@@ -597,9 +670,9 @@ if st.session_state.projections is not None:
 
     # Display all projections
     st.markdown("#### Projections")
-    fig = plot_projections(df)
+    proj_plot = plot_projections(df)
     buffer = io.StringIO()
-    fig.write_html(buffer, include_plotlyjs="cdn")
+    proj_plot.write_html(buffer, include_plotlyjs="cdn")
     html_bytes = buffer.getvalue().encode()
 
     # Download plot as HTML
@@ -632,6 +705,6 @@ if st.session_state.projections is not None:
         st.download_button(
             label="Download CSV",
             data=df.to_csv(),
-            file_name=f"results.csv",
+            file_name="results.csv",
             mime="text/csv",
         )
