@@ -425,15 +425,23 @@ def multiple_queries_expansion(user_query, df_query_original, model_id='anthropi
     """
     Expands a user query by creating multiple sub-queries
     """
-    system_msg = "Given a query, your task is to generate 3 to 5 simple sub-queries related to the original query. These sub-queries must be short. Format your reply in JSON with numbered keys. Skip the preamble."  # pylint: disable=line-too-long
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_msg),
-        ("human", "\"{user_query}\"")
-    ])
-    model = BedrockChat(model_id=model_id)
-    output_parser = StrOutputParser()
-    chain = prompt | model | output_parser
-    output = chain.invoke({"user_query": user_query})
+    prompt = f"""
+System: Given a query, your task is to generate 3 to 5 simple sub-queries related to the original query. These sub-queries must be short. Format your reply in JSON with numbered keys. Skip the preamble.
+
+Human: "{user_query}"
+
+Assistant:
+"""  # pylint: disable=line-too-long
+    body = body = json.dumps({
+        "prompt": prompt, "max_tokens_to_sample": 1000
+    })
+    response = bedrock_runtime.invoke_model(
+        modelId=model_id,
+        body=body,
+        accept="application/json",
+        contentType="application/json"
+    )
+    output = json.loads(response.get("body").read())['completion']
     try:
         st.session_state.query_expansions = list(json.loads(output).values())
         st.session_state.query_expansion_projections = np.array([
