@@ -43,8 +43,11 @@ import plotly.graph_objs as go
 import streamlit as st
 
 from chromadb.utils.embedding_functions import (
-    AmazonBedrockEmbeddingFunction
+    AmazonBedrockEmbeddingFunction,
+    SentenceTransformerEmbeddingFunction
 )
+
+from huggingface_hub.utils import RepositoryNotFoundError
 
 from langchain.prompts import ChatPromptTemplate
 
@@ -65,6 +68,15 @@ from umap import UMAP
 #############
 # Constants #
 #############
+
+# State
+state_vars = [
+    "collection",
+    "documents",
+    "projections",
+    "query_projections",
+    "retrieved_ids"
+]
 
 # 2D
 plot_settings = {
@@ -411,7 +423,7 @@ def plot_projections(df_projs):
 
     fig.update_layout(
         title={
-            'text': f"{uploaded_file.name} <br><sup>{embedding_model['modelName']} | ({chunk_size}, {chunk_overlap}) chunks | {n_components}D {dim_redux}</sup>",
+            'text': f"{uploaded_file.name} <br><sup>{model_provider} | {embedding_model['modelName'] if model_provider == 'Amazon Bedrock ⛰️' else embedding_model if model_provider == 'HuggingFace 🤗' else None} | ({chunk_size}, {chunk_overlap}) chunks | {n_components}D {dim_redux}</sup>",
             'x': 0.5,
             'xanchor': 'center'
         },
@@ -516,17 +528,32 @@ def generated_answer_expansion(user_query, df_query_original, model_id='anthropi
         st.warning("Model failed to expand query, falling back to the naive approach!")
         return [user_query], df_query_original
 
+
+def initialize():
+    """
+    Pre-initializes the session state
+    """
+    for key in state_vars:
+        if key not in st.session_state:
+            st.session_state[key] = None
+
+
+def reset():
+    """
+    Resets session state and re-runs the application
+    """
+    for key in state_vars:
+        st.session_state[key] = None
+
 ########
 # Main #
 ########
 
 st.title("RAGMap 🗺️🔍")
-st.text("Visualize document chunks and queries in embedding space")
+st.text("From meaning to vectors and back...")
 
 # Initialize session state
-for key in ["collection", "documents", "projections", "query_projections", "retrieved_ids"]:
-    if key not in st.session_state:
-        st.session_state[key] = None
+initialize()
 
 # Initialize session
 session = boto3.Session()
@@ -565,17 +592,38 @@ chunk_overlap = st.number_input(
     help="Number of tokens shared between consecutive chunks to maintain context",
 )
 
-embedding_model = st.selectbox(
-    label="Embedding Model",
-    options=list_embedding_models(),
+model_provider = st.radio(
+    label="Model Provider",
+    options=[
+        "Amazon Bedrock ⛰️",
+        "HuggingFace 🤗"
+    ],
+    horizontal=True,
     index=0,
-    format_func=lambda option: f"{option['modelName']} ({option['modelId']})",
-    key="embedding_model",
-    help="The model used to encapsulate information \
-        into dense representations in a multi-dimensional space",
+    on_change=reset,
+    key="model_provider",
+    help="Where the model comes from",
 )
 
-st.markdown(model2table(embedding_model), unsafe_allow_html=True)
+if model_provider == "Amazon Bedrock ⛰️":
+    embedding_model = st.selectbox(
+        label="Embedding Model",
+        options=list_embedding_models(),
+        index=0,
+        format_func=lambda option: f"{option['modelName']} ({option['modelId']})",
+        key="embedding_model",
+        help="The model used to encapsulate information \
+            into dense representations in a multi-dimensional space",
+    )
+    st.markdown(model2table(embedding_model), unsafe_allow_html=True)
+elif model_provider == "HuggingFace 🤗":
+    embedding_model = st.text_input(
+        label="Embedding Model",
+        key="embedding_model",
+        placeholder="Enter the model name e.g. all-MiniLM-L6-v2",
+        help="The model used to encapsulate information \
+            into dense representations in a multi-dimensional space",
+    )
 
 dim_redux = st.radio(
     label="Dimensionality Reduction",
@@ -591,7 +639,7 @@ dim_redux = st.radio(
     ],
     horizontal=True,
     index=0,
-    on_change=create_projections(),
+    on_change=create_projections,
     key="dim_redux",
     help="The algorithm or technique used for dimensionality reduction",
 )
@@ -605,20 +653,31 @@ n_components = st.radio(
     horizontal=True,
     index=0,
     format_func=lambda option: f"{option}D",
-    on_change=create_projections(),
+    on_change=create_projections,
     key="n_components",
     help="The dimensionality of the reduced embedding space",
 )
 
 if embedding_model is not None:
-    st.session_state.embedding_function = AmazonBedrockEmbeddingFunction(
-        session=session,
-        model_name=embedding_model['modelId']
-    )
+    if model_provider == "Amazon Bedrock ⛰️":
+        st.session_state.embedding_function = AmazonBedrockEmbeddingFunction(
+            session=session,
+            model_name=embedding_model['modelId']
+        )
+    elif model_provider == "HuggingFace 🤗":
+        try:
+            st.session_state.embedding_function = SentenceTransformerEmbeddingFunction(
+                model_name=embedding_model
+            )
+        except RepositoryNotFoundError as ex:
+            st.error(ex)
 
 if st.button(label="Build"):
     if uploaded_file is None:
         st.error("No file uploaded!")
+    elif model_provider == "HuggingFace 🤗" and \
+       len(embedding_model) == 0:
+        st.error("Model name must not be empty!")
     else:
         if st.session_state.collection is None:
             build_collection()

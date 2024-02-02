@@ -2,34 +2,42 @@
 
 ## Overview
 
-A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.com/bedrock/) that helps visualize document chunks and queries in embedding space.
+RAGmap is a simple RAG visualization tool for exploring document chunks and queries in embedding space.
 
 > Inspired by DeepLearning.ai's short course on [Advanced Retrieval for AI with Chroma](https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/) and Gabriel Chua's award-winning [RAGxplorer](https://github.com/gabrielchua/RAGxplorer).
 
-<img src="images/ragmap.gif" width="75%"/>
+📢 **NEW:** RAGmap now supports [Hugging Face 🤗](https://huggingface.co) models!
 
-## Features
+<img src="images/ragmap_hf_support.gif" width="75%"/>
 
-* Load multiple document formats
+## What's inside?
+
+RAGmap supports the following features:
+
+* Multiple document formats 📄
 	- `PDF`
 	- `DOCX`
 	- `PPTX`
-* Support for multiple embedding models (via Amazon Bedrock)
-	- [Titan Text Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html)
-	- [Titan Multimodal Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-multiemb-models.html)
-	- [Cohere Embed English](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html) (*)
-	- [Cohere Embed Multilingual](https://aws.amazon.com/blogs/aws/amazon-bedrock-now-provides-access-to-cohere-command-light-and-cohere-embed-english-and-multilingual-models/) (*)
-* Create 2D and 3D projection plots
+* Multiple embedding models
+	- Hugging Face 🤗
+	- Amazon Bedrock ⛰️
+		- [Titan Text Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html)
+		- [Titan Multimodal Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-multiemb-models.html)
+		- [Cohere Embed English](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html)
+		- [Cohere Embed Multilingual](https://aws.amazon.com/blogs/aws/amazon-bedrock-now-provides-access-to-cohere-command-light-and-cohere-embed-english-and-multilingual-models/)
+* Dimensionality reduction (2D and 3D)
 	- [UMAP](https://umap-learn.readthedocs.io/en/latest/)
 	- [t-SNE](https://opentsne.readthedocs.io/en/stable/)
 	- [PCA](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html)
-* Run natural language queries
-* Support for advanced retrieval techniques
+* Natural language queries
+* Advanced query augmentation
 	- Generated Answers (HyDE)
 	- Multiple Queries
-* Export plots (`HTML`) and query results (`CSV`)
+* ... and more!
 
-(*) ☝️ **Important notice:** As of January 2024, chromadb's `AmazonBedrockEmbeddingFunction` only works with Titan models. Feel free to upvote this [PR](https://github.com/chroma-core/chroma/pull/1675) to add support for [Cohere Embed models](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html).
+☝️⚠️ **Important notice:** As of January 2024, chromadb's `AmazonBedrockEmbeddingFunction` only works with Titan models. Feel free to upvote this [PR](https://github.com/chroma-core/chroma/pull/1675) to add support for [Cohere Embed models](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html).
+
+<img src="images/ragmap.gif" width="75%"/>
 
 ## How to use
 
