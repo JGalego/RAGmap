@@ -10,7 +10,7 @@ A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.co
 
 ## Features
 
-* Support for multiple document formats
+* Load multiple document formats
 	- `PDF`
 	- `DOCX`
 	- `PPTX`
@@ -27,8 +27,7 @@ A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.co
 * Support for advanced retrieval techniques
 	- Generated Answers (HyDE)
 	- Multiple Queries
-* Export plots as HTML
-* Export query results as CSV
+* Export plots (`HTML`) and query results (`CSV`)
 
 (*) ☝️ **Important notice:** As of January 2024, chromadb's `AmazonBedrockEmbeddingFunction` only works with Titan models. Feel free to upvote this [PR](https://github.com/chroma-core/chroma/pull/1675) to add support for [Cohere Embed models](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html).
 
