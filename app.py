@@ -318,6 +318,8 @@ def project_embeddings(embeddings, transform):
     """
     Projects text embeddings using a transform
     """
+    if isinstance(embeddings, list):
+        embeddings = np.array(embeddings)
     projs = np.empty((len(embeddings), n_components))
     projs = transform.transform(embeddings)
     return projs
@@ -408,11 +410,15 @@ def plot_projections(df_projs):
         fig.add_trace(trace)
 
     fig.update_layout(
+        title={
+            'text': f"{uploaded_file.name} <br><sup>{embedding_model['modelName']} | ({chunk_size}, {chunk_overlap}) chunks | {n_components}D {dim_redux}</sup>",
+            'x': 0.5,
+            'xanchor': 'center'
+        },
         legend={
 			'x': 0.5,
-            'y': 100,
             'xanchor': "center",
-            'yanchor': "top",
+            'yanchor': "bottom",
             'orientation': "h"
 		}
     )
