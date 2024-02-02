@@ -6,27 +6,27 @@ A simple Streamlit application powered by [Amazon Bedrock](https://aws.amazon.co
 
 > Inspired by DeepLearning.ai's short course on [Advanced Retrieval for AI with Chroma](https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/) and Gabriel Chua's award-winning [RAGxplorer](https://github.com/gabrielchua/RAGxplorer).
 
-<img src="images/ragmap.png" width="50%">
+<img src="images/ragmap.gif" width="75%"/>
 
 ## Features
 
-* Supports multiple document formats
+* Support for multiple document formats
 	- `PDF`
 	- `DOCX`
 	- `PPTX`
-* Supports multiple models via Amazon Bedrock
+* Support for multiple embedding models (via Amazon Bedrock)
 	- [Titan Text Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html)
 	- [Titan Multimodal Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-multiemb-models.html)
 	- [Cohere Embed English](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html) (*)
 	- [Cohere Embed Multilingual](https://aws.amazon.com/blogs/aws/amazon-bedrock-now-provides-access-to-cohere-command-light-and-cohere-embed-english-and-multilingual-models/) (*)
-* Generates 2D and 3D projection plots
+* Create 2D and 3D projection plots
 	- [UMAP](https://umap-learn.readthedocs.io/en/latest/)
 	- [t-SNE](https://opentsne.readthedocs.io/en/stable/)
 	- [PCA](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html)
-* Runs queries using natural language
+* Run natural language queries
 * Support for advanced retrieval techniques
-	- HyDE
-	- Multi Qns
+	- Generated Answers (HyDE)
+	- Multiple Queries
 * Export plots as HTML
 * Export query results as CSV
 
@@ -60,13 +60,13 @@ Enable access to the embedding ([Titan Embeddings](https://docs.aws.amazon.com/b
 
 ### Option 2 🐳
 
-1. Run the following command to start the service
+1. Run the following command to start the application
 
 	```
 	docker-compose up
 	```
 
-2. Once the container is up and running, head over to http://localhost:8501
+2. Once the service is up and running, head over to http://localhost:8501
 
 ## Example: [Amazon shareholder letters](https://medium.com/@austenallred/every-amazon-shareholder-letter-as-downloadable-pdf-4eb2ae886018)
 
