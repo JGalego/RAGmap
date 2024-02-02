@@ -35,6 +35,7 @@ import uuid
 from textwrap import wrap
 
 import boto3
+import botocore
 import chromadb
 
 import numpy as np
@@ -155,11 +156,15 @@ def list_embedding_models():
     """
     Returns a list of embedding models available in Amazon Bedrock
     """
-    # Filter out provisioned throughput only models
-    # https://docs.aws.amazon.com/bedrock/latest/userguide/prov-throughput-models.html
-    return [model for model in bedrock.list_foundation_models(
-                                    byOutputModality='EMBEDDING')['modelSummaries'] \
-                                        if model['inferenceTypesSupported'] != ["PROVISIONED"]]
+    try:
+        # Filter out provisioned throughput only models
+        # https://docs.aws.amazon.com/bedrock/latest/userguide/prov-throughput-models.html
+        return [model for model in bedrock.list_foundation_models(
+                                        byOutputModality='EMBEDDING')['modelSummaries'] \
+                                            if model['inferenceTypesSupported'] != ["PROVISIONED"]]
+    except botocore.exceptions.ClientError as error:
+        st.error(error)
+        return []
 
 
 st.cache_data()
@@ -167,8 +172,12 @@ def list_text_models():
     """
     Returns a list of text models available in Amazon Bedrock
     """
-    return bedrock.list_foundation_models(
-        byOutputModality='TEXT')['modelSummaries']
+    try:
+        return bedrock.list_foundation_models(
+            byOutputModality='TEXT')['modelSummaries']
+    except botocore.exceptions.ClientError as error:
+        st.error(error)
+        return []
 
 
 st.cache_data()
@@ -176,6 +185,9 @@ def model2table(model):
     """
     Turns a model summary into a table
     """
+    if model is None:
+        return None
+
     model_status = model['modelLifecycle']['status']
     model_status = "✅" if model_status == "ACTIVE" else "👴" if model_status == "LEGACY" else "❓"
 
@@ -282,6 +294,24 @@ def chunk_texts(texts):
     )
     chunks = character_splitter.split_text('\n\n'.join(texts))
     return chunks
+
+
+def embedding_function():
+    """
+    Specifies the embedding function
+    """
+    if model_provider == "Amazon Bedrock ⛰️":
+        st.session_state.embedding_function = AmazonBedrockEmbeddingFunction(
+            session=session,
+            model_name=embedding_model['modelId']
+        )
+    elif model_provider == "HuggingFace 🤗":
+        try:
+            st.session_state.embedding_function = SentenceTransformerEmbeddingFunction(
+                model_name=embedding_model
+            )
+        except RepositoryNotFoundError as error:
+            st.error(error)
 
 
 def build_collection():
@@ -423,7 +453,7 @@ def plot_projections(df_projs):
 
     fig.update_layout(
         title={
-            'text': f"{uploaded_file.name} <br><sup>{model_provider} | {embedding_model['modelName'] if model_provider == 'Amazon Bedrock ⛰️' else embedding_model if model_provider == 'HuggingFace 🤗' else None} | ({chunk_size}, {chunk_overlap}) chunks | {n_components}D {dim_redux}</sup>",
+            'text': f"{uploaded_file.name} <br><sup>{model_provider} | {embedding_model['modelName'] if model_provider == 'Amazon Bedrock ⛰️' else embedding_model if model_provider == 'HuggingFace 🤗' else None} | ({chunk_size}, {chunk_overlap}) chunks | {n_components}D {dim_redux}</sup>",  # pylint: disable=line-too-long
             'x': 0.5,
             'xanchor': 'center'
         },
@@ -453,14 +483,14 @@ Assistant:
     body = body = json.dumps({
         "prompt": prompt, "max_tokens_to_sample": 1000
     })
-    response = bedrock_runtime.invoke_model(
-        modelId=model_id,
-        body=body,
-        accept="application/json",
-        contentType="application/json"
-    )
-    output = json.loads(response.get("body").read())['completion']
     try:
+        response = bedrock_runtime.invoke_model(
+            modelId=model_id,
+            body=body,
+            accept="application/json",
+            contentType="application/json"
+        )
+        output = json.loads(response.get("body").read())['completion']
         st.session_state.query_expansions = list(json.loads(output).values())
         st.session_state.query_expansion_projections = np.array([
             project_embeddings(
@@ -480,8 +510,12 @@ Assistant:
 
         df_query_expanded = pd.concat([df_query_original, df_query_expansions])
         return st.session_state.query_expansions, df_query_expanded
+    except botocore.exceptions.ClientError as error:
+        st.error(error)
+        st.warning("Failed to expand query, falling back to the naive approach!")
+        return [user_query], df_query_original
     except json.decoder.JSONDecodeError:
-        st.warning("Model failed to expand query, falling back to the naive approach!")
+        st.warning("Failed to expand query, falling back to the naive approach!")
         return [user_query], df_query_original
 
 
@@ -501,8 +535,8 @@ def generated_answer_expansion(user_query, df_query_original, model_id='anthropi
     model = BedrockChat(model_id=model_id)
     output_parser = StrOutputParser()
     chain = prompt | model | output_parser
-    output = chain.invoke({"user_query": user_query})
     try:
+        output = chain.invoke({"user_query": user_query})
         st.session_state.query_expansions = [output]
         st.session_state.query_expansion_projections = np.array([
             project_embeddings(
@@ -524,9 +558,12 @@ def generated_answer_expansion(user_query, df_query_original, model_id='anthropi
 
         df_query_expanded = pd.concat([df_query_original, df_query_expansions])
         return st.session_state.query_expansions, df_query_expanded
+    except botocore.exceptions.ClientError as error:
+        st.error(error)
     except json.decoder.JSONDecodeError:
-        st.warning("Model failed to expand query, falling back to the naive approach!")
-        return [user_query], df_query_original
+        pass
+    st.warning("Model failed to expand query, falling back to the naive approach!")
+    return [user_query], df_query_original
 
 
 def initialize():
@@ -659,18 +696,7 @@ n_components = st.radio(
 )
 
 if embedding_model is not None:
-    if model_provider == "Amazon Bedrock ⛰️":
-        st.session_state.embedding_function = AmazonBedrockEmbeddingFunction(
-            session=session,
-            model_name=embedding_model['modelId']
-        )
-    elif model_provider == "HuggingFace 🤗":
-        try:
-            st.session_state.embedding_function = SentenceTransformerEmbeddingFunction(
-                model_name=embedding_model
-            )
-        except RepositoryNotFoundError as ex:
-            st.error(ex)
+    embedding_function()
 
 if st.button(label="Build"):
     if uploaded_file is None:
@@ -678,6 +704,8 @@ if st.button(label="Build"):
     elif model_provider == "HuggingFace 🤗" and \
        len(embedding_model) == 0:
         st.error("Model name must not be empty!")
+    elif embedding_model is None:
+        st.error("No model selected!")
     else:
         if st.session_state.collection is None:
             build_collection()
