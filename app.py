@@ -1,3 +1,4 @@
+# pylint: disable=wrong-import-position
 r"""
    ___  ___  _____              
   / _ \/ _ |/ ___/_ _  ___ ____ 
@@ -166,9 +167,11 @@ def list_embedding_models():
         return [model for model in bedrock.list_foundation_models(
                                         byOutputModality='EMBEDDING')['modelSummaries'] \
                                             if model['inferenceTypesSupported'] != ["PROVISIONED"]]
-    except botocore.exceptions.ClientError as error:
+    except (botocore.exceptions.ClientError, botocore.exceptions.NoCredentialsError) as error:
         st.error(error)
-        return []
+    except NameError as error:
+        pass
+    return []
 
 
 st.cache_data()
@@ -179,9 +182,11 @@ def list_text_models():
     try:
         return bedrock.list_foundation_models(
             byOutputModality='TEXT')['modelSummaries']
-    except botocore.exceptions.ClientError as error:
+    except (botocore.exceptions.ClientError, botocore.exceptions.NoCredentialsError) as error:
         st.error(error)
-        return []
+    except NameError:
+        pass
+    return []
 
 
 st.cache_data()
@@ -600,8 +605,11 @@ initialize()
 session = boto3.Session()
 
 # Initialize bedrock clients
-bedrock = session.client('bedrock')
-bedrock_runtime = session.client('bedrock-runtime')
+try:
+    bedrock = session.client('bedrock')
+    bedrock_runtime = session.client('bedrock-runtime')
+except botocore.exceptions.NoCredentialsError as error:
+    st.error(error)
 
 st.markdown("### 1. Upload a document 📄")
 
