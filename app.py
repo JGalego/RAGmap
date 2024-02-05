@@ -30,9 +30,13 @@ https://github.com/gabrielchua/RAGxplorer/
 import io
 import json
 import os
+import sys
 import uuid
 
 from textwrap import wrap
+
+__import__('pysqlite3')
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 import boto3
 import botocore
