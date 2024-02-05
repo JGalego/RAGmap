@@ -598,8 +598,8 @@ def reset():
 ########
 
 st.set_page_config(
-    page_title = "RAGMap 🗺️🔍",
-    page_icon="🗺️",
+    page_title = "RAGMap",
+    page_icon="🗺️🔍",
     menu_items={
         'Get Help': 'https://github.com/JGalego/RAGmap',
         'Report a bug': "https://github.com/JGalego/RAGmap/issues",
