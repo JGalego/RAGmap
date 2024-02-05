@@ -599,7 +599,7 @@ def reset():
 
 st.set_page_config(
     page_title = "RAGMap",
-    page_icon="🗺️🔍",
+    page_icon="🗺️",
     menu_items={
         'Get Help': 'https://github.com/JGalego/RAGmap',
         'Report a bug': "https://github.com/JGalego/RAGmap/issues",
@@ -669,7 +669,7 @@ model_provider = st.radio(
     index=0,
     on_change=reset,
     key="model_provider",
-    help="Where the model comes from",
+    help="The company or service that provides/hosts the embedding model",
 )
 
 if model_provider == "Amazon Bedrock ⛰️":
@@ -679,8 +679,8 @@ if model_provider == "Amazon Bedrock ⛰️":
         index=0,
         format_func=lambda option: f"{option['modelName']} ({option['modelId']})",
         key="embedding_model",
-        help="The model used to encapsulate information \
-            into dense representations in a multi-dimensional space",
+        help="The model that turns information (text, image, &c.) \
+                into dense vector representations (embeddings)",
     )
     st.markdown(model2table(embedding_model), unsafe_allow_html=True)
 elif model_provider == "HuggingFace 🤗":
@@ -689,8 +689,8 @@ elif model_provider == "HuggingFace 🤗":
         key="embedding_model",
         placeholder="Enter the model name e.g. all-MiniLM-L6-v2",
         value="all-MiniLM-L6-v2",
-        help="The model used to encapsulate information \
-            into dense representations in a multi-dimensional space",
+        help="The model that turns information (text, image, &c.) \
+                into dense vector representations (embeddings)",
     )
 
 dimension_reduction = st.radio(
@@ -709,7 +709,7 @@ dimension_reduction = st.radio(
     index=0,
     on_change=create_projections,
     key="dimension_reduction",
-    help="The algorithm or technique used for dimensionality reduction",
+    help="The algorithm or technique used to project the embedding space",
 )
 
 # For more information, see
