@@ -36,6 +36,8 @@ import uuid
 
 from textwrap import wrap
 
+# Fix Chroma's low SQLite version issue
+# https://docs.trychroma.com/troubleshooting#sqlite
 __import__('pysqlite3')
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
