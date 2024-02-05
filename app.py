@@ -597,6 +597,22 @@ def reset():
 # Main #
 ########
 
+st.set_page_config(
+    page_title = "RAGMap 🗺️🔍",
+    page_icon="🗺️",
+    menu_items={
+        'Get Help': 'https://github.com/JGalego/RAGmap',
+        'Report a bug': "https://github.com/JGalego/RAGmap/issues",
+        'About': """
+RAGmap is a simple RAG visualization tool for exploring document chunks and queries in embedding space.
+
+It was inspired by DeepLearning.ai's short course on [Advanced Retrieval for AI with Chroma](https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/) and Gabriel Chua's award-winning [RAGxplorer 🦙🦺](https://github.com/gabrielchua/RAGxplorer).
+
+☝️ **Help needed:** feel free to reach out to [JGalego](https://github.com/JGalego) if you want to contribute.
+"""
+    }
+)
+
 st.title("RAGMap 🗺️🔍")
 st.text("From meaning to vectors and back...")
 
