@@ -11,3 +11,4 @@ PyPDF2
 scikit-learn
 streamlit
 umap-learn
+pysqlite3-binary
