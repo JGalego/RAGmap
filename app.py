@@ -1,4 +1,4 @@
-# pylint: disable=wrong-import-position
+# pylint: disable=wrong-import-position,redefined-outer-name
 r"""
    ___  ___  _____              
   / _ \/ _ |/ ___/_ _  ___ ____ 
@@ -171,7 +171,7 @@ def list_embedding_models():
                                             if model['inferenceTypesSupported'] != ["PROVISIONED"]]
     except (botocore.exceptions.ClientError, botocore.exceptions.NoCredentialsError) as error:
         st.error(error)
-    except NameError as error:
+    except NameError:
         pass
     return []
 
@@ -396,15 +396,15 @@ def create_projections():
 
     # Fit projection transform
     with st.spinner("Fitting embeddings"):
-        if st.session_state.dim_redux == "UMAP":
+        if st.session_state.dimension_reduction == "UMAP":
             transform = UMAP(
                 random_state=0, transform_seed=0, n_components=st.session_state.n_components
             ).fit(st.session_state.embeddings)
-        elif st.session_state.dim_redux == "t-SNE":
+        elif st.session_state.dimension_reduction == "t-SNE":
             transform = TSNE(
                 random_state=0, n_components=st.session_state.n_components
             ).fit(st.session_state.embeddings)
-        elif st.session_state.dim_redux == "PCA":
+        elif st.session_state.dimension_reduction == "PCA":
             transform = PCA(
                 random_state=0, n_components=st.session_state.n_components
             ).fit(st.session_state.embeddings)
@@ -464,7 +464,7 @@ def plot_projections(df_projs):
 
     fig.update_layout(
         title={
-            'text': f"{uploaded_file.name} <br><sup>{model_provider} | {embedding_model['modelName'] if model_provider == 'Amazon Bedrock ⛰️' else embedding_model if model_provider == 'HuggingFace 🤗' else None} | ({chunk_size}, {chunk_overlap}) chunks | {n_components}D {dim_redux}</sup>",  # pylint: disable=line-too-long
+            'text': f"{uploaded_file.name} <br><sup>{model_provider} | {embedding_model['modelName'] if model_provider == 'Amazon Bedrock ⛰️' else embedding_model if model_provider == 'HuggingFace 🤗' else None} | ({chunk_size}, {chunk_overlap}) chunks | {n_components}D {dimension_reduction}</sup>",  # pylint: disable=line-too-long
             'x': 0.5,
             'xanchor': 'center'
         },
@@ -672,11 +672,12 @@ elif model_provider == "HuggingFace 🤗":
         label="Embedding Model",
         key="embedding_model",
         placeholder="Enter the model name e.g. all-MiniLM-L6-v2",
+        value="all-MiniLM-L6-v2",
         help="The model used to encapsulate information \
             into dense representations in a multi-dimensional space",
     )
 
-dim_redux = st.radio(
+dimension_reduction = st.radio(
     label="Dimensionality Reduction",
     options=[
         "UMAP",
@@ -691,7 +692,7 @@ dim_redux = st.radio(
     horizontal=True,
     index=0,
     on_change=create_projections,
-    key="dim_redux",
+    key="dimension_reduction",
     help="The algorithm or technique used for dimensionality reduction",
 )
 
