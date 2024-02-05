@@ -9,5 +9,7 @@ python-docx
 python-pptx
 PyPDF2
 scikit-learn
+sentence_transformers
 streamlit
 umap-learn
+pysqlite3-binary
