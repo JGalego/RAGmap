@@ -6,7 +6,7 @@ RAGmap is a simple RAG visualization tool for exploring document chunks and quer
 
 > Inspired by DeepLearning.ai's short course on [Advanced Retrieval for AI with Chroma](https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/) and Gabriel Chua's award-winning [RAGxplorer](https://github.com/gabrielchua/RAGxplorer).
 
-🌐 **NEW:** Try the [online demo](https://ragmap.streamlit.app/) on Streamlit Community Cloud.
+🌐 **NEW:** Try the [live demo](https://ragmap.streamlit.app/) hosted on Streamlit Community Cloud.
 
 📢 **NEW:** RAGmap now supports [Hugging Face 🤗](https://huggingface.co) models!
 
