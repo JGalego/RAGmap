@@ -31,21 +31,23 @@ from .constants import (
 
 logger = logging.getLogger(__name__)
 
-def process_file(f: Any) -> Tuple[List[str], Dict]:
+def process_file(
+    input: Any  # pylint: disable=redefined-builtin
+    ) -> Tuple[List[str], Dict]:
     """
     Digests a file and returns text and metadata.
     """
-    if isinstance(f, str) and os.path.isfile(f):
-        _, f_ext = os.path.splitext(f)
+    if isinstance(input, str) and os.path.isfile(input):
+        _, f_ext = os.path.splitext(input)
         # PDF
         if f_ext == ".pdf":
-            f = PdfReader(f)
+            f = PdfReader(input)
         # DOCX
         elif f_ext == ".docx":
-            f = Document(f)
+            f = Document(input)
         # PPTX
         elif f_ext == ".pptx":
-            f = Presentation(f)
+            f = Presentation(input)
         else:
             raise NotImplementedError(f"{f_ext} files are not supported!")
     else:
@@ -90,7 +92,7 @@ def plot_projections(
     df: pd.DataFrame,
     provider: ModelProvider,
     embedding_model: str,
-    dim_redux: DimensionReduction,
+    dimension_reduction: DimensionReduction,
     n_components: int) -> go.Figure:
     """
     Creates a plot of categorized embedding projections.
@@ -138,7 +140,9 @@ def plot_projections(
 
     fig.update_layout(
         title={
-            'text': f"<sup>{provider.value} | {embedding_model} | {n_components}D {dim_redux.value.__name__}</sup>",
+            'text': f"""
+<sup>{provider.value} | {embedding_model} | {n_components}D {dimension_reduction.value.__name__}</sup>
+""",
             'x': 0.5,
             'xanchor': 'center'
         },

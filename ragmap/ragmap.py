@@ -144,13 +144,16 @@ class RAGmap(BaseModel):
             return self.text_splitter(text)
         raise RAGmapError(f"Text splitter of type {type(self.text_splitter)} is not supported!")
 
-    def load_file(self, f: Any) -> None:
+    def load_file(
+        self,
+        input: Any  # pylint: disable=redefined-builtin
+    ) -> None:
         """
         Indexes and stores a single file in the vector DB.
         """
         # Process file
-        logger.info("Loading >>> %s", f)
-        texts, metadata = process_file(f)
+        logger.info("Loading >>> %s", input)
+        texts, metadata = process_file(input)
 
         # Split text into chunks
         logger.info("Splitting text into chunks")
@@ -166,12 +169,19 @@ class RAGmap(BaseModel):
         )
         self._last_id += len(chunks)
 
-    def load_files(self, fs: List[str]) -> None:
+    def load_files(self, inputs: List[str]) -> None:
         """
         Indexes and stores multiple files in the vector database.
         """
-        for f in fs:
-            self.load_file(f)
+        for input in inputs:  # pylint: disable=redefined-builtin
+            self.load_file(input)
+
+    def embed(
+        self,
+        input: OneOrMany[str]  # pylint: disable=redefined-builtin
+	):
+        """Converts incoming texts into embeddings."""
+        return self._embedding_function(input=input)
 
     def query(  # pylint: disable=too-many-arguments
         self,
@@ -200,24 +210,24 @@ class RAGmap(BaseModel):
 
     def _fit_transform(
         self,
-        dim_redux: DimensionReduction = DimensionReduction.UMAP,
+        dimension_reduction: DimensionReduction = DimensionReduction.UMAP,
         n_components: int = 2,
         **kwargs):
         """
-        Generates a dimensionality reduction transform from a collection og embeddings.
+        Returns a dimensionality reduction transform fitted to the embedding collection.
         """
         logger.info("Retrieving vectors from datastore")
         embeddings = np.array(self._vectordb.get(include=['embeddings'])['embeddings'])
-
-        logger.info("Fitting embeddings")
-        return dim_redux.value(
+        logger.info("Fitting %iD %s transform to embeddings", \
+                    n_components, dimension_reduction.value.__name__)
+        return dimension_reduction.value(
             n_components=n_components,
             **kwargs
         ).fit(embeddings)
 
-    def _create_projections(
+    def create_projections(
         self,
-        dim_redux: DimensionReduction = DimensionReduction.UMAP,
+        dimension_reduction: DimensionReduction = DimensionReduction.UMAP,
         n_components: int = 2,
         **kwargs):
         """
@@ -226,15 +236,17 @@ class RAGmap(BaseModel):
         embeddings = np.array(
             self._vectordb.get(include=['embeddings'])['embeddings']
         )
-        logger.info("Generating %iD %s projections", n_components, dim_redux.value.__name__)
-        return self._fit_transform(dim_redux, n_components, **kwargs).transform(embeddings)
+        logger.info("Generating %iD %s projections", \
+                    n_components, dimension_reduction.value.__name__)
+        dim_redux = self._fit_transform(dimension_reduction, n_components, **kwargs)
+        return dim_redux.transform(embeddings), dim_redux
 
     def plot(  # pylint: disable=too-many-locals
         self,
-        dim_redux: DimensionReduction = DimensionReduction.UMAP,
+        dimension_reduction: DimensionReduction = DimensionReduction.UMAP,
         n_components: int = 2,
         query: Dict | None = None,
-        dim_redux_config: Dict | None = None) -> go.Figure:
+        dimension_reduction_kwargs: Dict | None = None) -> go.Figure:
         """
         Creates a 2D or 3D plot of the reduced embedding space.
         """
@@ -250,12 +262,12 @@ class RAGmap(BaseModel):
         documents = data['documents']
 
         # Generate projections
-        if dim_redux_config is None:
-            dim_redux_config = {}
-        projections = self._create_projections(
-            dim_redux,
-            n_components=n_components,
-            **dim_redux_config
+        if dimension_reduction_kwargs is None:
+            dimension_reduction_kwargs = {}
+        emb_projs, dim_redux = self.create_projections(
+			dimension_reduction,
+            n_components,
+            **dimension_reduction_kwargs
         )
 
         # Run query and process results
@@ -267,13 +279,13 @@ class RAGmap(BaseModel):
         else:
             retrieved_ids = []
 
-        # Prepare dataframe
-        logger.info("Preparing dataframe for visualization")
+        # Prepare embedding projections dataframe for visualization
+        logger.info("Preparing embeddings projection dataframe for visualization")
         df = pd.DataFrame({
             'id': [int(id) for id in ids],
-            'x': projections[:, 0],
-            'y': projections[:, 1],
-            'z': projections[:, 2] if n_components == 3 else None,
+            'x': emb_projs[:, 0],
+            'y': emb_projs[:, 1],
+            'z': emb_projs[:, 2] if n_components == 3 else None,
             'document_cleaned': [
                 "<br>".join(wrap(doc, wrap_width))
                     for doc in documents
@@ -286,24 +298,22 @@ class RAGmap(BaseModel):
 
         # Add query projections
         if query is not None:
-            query_embeddings = query.get(
-                'query_embeddings', self._embedding_function(
-                        [query['query_texts']] \
-                            if isinstance(query['query_texts'], str) \
-                            else query['query_texts']
+            query_embs = query.get(
+                'query_embeddings', 
+                self.embed(
+                    [query['query_texts']] \
+                        if isinstance(query['query_texts'], str) \
+                        else query['query_texts']
                 )
             )
-            query_projs = self._fit_transform(
-                dim_redux,
-                n_components
-            ).transform(query_embeddings)
+            query_projs = dim_redux.transform(query_embs)
             df_query = pd.DataFrame({
                 'x': query_projs[:, 0],
                 'y': query_projs[:, 1],
                 'z': query_projs[:, 2] if n_components == 3 else None,
                 'document_cleaned': query.get('query_texts', None),
                 'category': [IndexCategory.QUERY] + \
-                    		[IndexCategory.SUB_QUERY]*(len(query_projs) - 1)
+                    		[IndexCategory.SUB_QUERY] * (len(query_projs) - 1)
             })
             df = pd.concat([df, df_query], axis=0)
 
@@ -312,6 +322,6 @@ class RAGmap(BaseModel):
             df,
             self.provider,
             self.embedding_model,
-            dim_redux,
+            dimension_reduction,
             n_components
         )
