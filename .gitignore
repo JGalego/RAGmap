@@ -3,6 +3,8 @@
 *.docx
 *.ppt
 *.pptx
+*.egg-info
 embeddings
 __pycache__
+build
 .ipynb_checkpoints

@@ -81,9 +81,9 @@ class RAGmap(BaseModel):
     text_splitter: Any
     embedding_model: str
     provider: ModelProvider
-    boto3_sess_args: Dict | None = None
-    embed_func_kwargs: Dict | None = None
-    collection_metadata: Dict | None = None
+    boto3_sess_args: Union[Dict, None] = None
+    embed_func_kwargs: Union[Dict, None] = None
+    collection_metadata: Union[Dict, None] = None
     _embedding_function: Optional[chromadb.api.types.EmbeddingFunction] = None
     _vectordb: Optional[chromadb.Collection] = None
     _last_id: int = 0
@@ -185,13 +185,13 @@ class RAGmap(BaseModel):
 
     def query(  # pylint: disable=too-many-arguments
         self,
-        query_embeddings: OneOrMany[chromadb.api.types.Embedding] | \
-                          OneOrMany[np.ndarray] | \
-                          None = None,
-        query_texts: OneOrMany[str] | None = None,
+        query_embeddings: Union[OneOrMany[chromadb.api.types.Embedding], \
+                          OneOrMany[np.ndarray], \
+                          None] = None,
+        query_texts: Union[OneOrMany[str],None] = None,
         n_results: int = 10,
-        where: chromadb.api.types.Where | None = None,
-        where_document: chromadb.api.types.WhereDocument | None = None):
+        where: Union[chromadb.api.types.Where, None] = None,
+        where_document: Union[chromadb.api.types.WhereDocument, None] = None):
         """
         Returns similar entries in the vector database for provided embeddings or texts.
         """
@@ -245,8 +245,8 @@ class RAGmap(BaseModel):
         self,
         dimension_reduction: DimensionReduction = DimensionReduction.UMAP,
         n_components: int = 2,
-        query: Dict | None = None,
-        dimension_reduction_kwargs: Dict | None = None) -> go.Figure:
+        query: Union[Dict, None] = None,
+        dimension_reduction_kwargs: Union[Dict, None] = None) -> go.Figure:
         """
         Creates a 2D or 3D plot of the reduced embedding space.
         """
