@@ -1,4 +1,3 @@
-# pylint: disable=import-outside-toplevel
 r"""
    ___  ___  _____
   / _ \/ _ |/ ___/_ _  ___ ____
@@ -20,205 +19,112 @@ r"""
           _____|_____
     jgs  /___________\
 
-A simple Python module that helps visualize document chunks and queries in embedding space.
+A simple Python module to help visualize document chunks and queries in embedding space.
 """
 
-import os
 import logging
 import uuid
 
-from enum import Enum
-
 from textwrap import wrap
-
 from typing import (
     Any,
     Dict,
     List,
     Optional,
-    Sequence,
     TypeVar,
     Union
 )
 
+import boto3
 import chromadb
 import langchain
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
+
 from pydantic import BaseModel
 
+# Embedding functions
 from chromadb.utils.embedding_functions import (
     AmazonBedrockEmbeddingFunction,
     OpenAIEmbeddingFunction,
     SentenceTransformerEmbeddingFunction
 )
 
-# File types
-from docx import Document
-from pptx import Presentation
-from PyPDF2 import PdfReader
+from .constants import (
+	ModelProvider,
+    DimensionReduction,
+    IndexCategory,
+    wrap_width
+)
 
-# Dimensionality reduction
-from openTSNE import TSNE
-from sklearn.decomposition import PCA
-from umap import UMAP
+from .utils import (
+	process_file,
+    plot_projections
+)
 
-# Initialize logger
+T = TypeVar("T")
+OneOrMany = Union[T, List[T]]
+
+# Log initialization
 logger = logging.getLogger(__name__)
-
-class ModelProvider(Enum):
-    """
-    Supported embedding model providers.
-    """
-    AMAZON_BEDROCK = "Amazon Bedrock ⛰️"
-    HUGGING_FACE = "HuggingFace 🤗"
-    OPENAI = "OpenAI"
-
-class DimensionReduction(Enum):
-    """
-    Supported dimensionality reduction techniques.
-    """
-    UMAP = UMAP
-    TSNE = TSNE
-    PCA = PCA
-
-class IndexCategory(Enum):
-    """
-    The different categories for each indexed chunk.
-    """
-    CHUNK = "Chunk"
-    QUERY = "Query"
-    RETRIEVED = "Retrieved"
-    SUB_QUERY = "Sub-query"
-    HYPOTHETICAL_ANSWER = "Hypothetical Answer"
-
-# 2D
-plot_settings = {
-    IndexCategory.CHUNK: {
-        'color': 'blue',
-        'opacity': 0.5,
-        'symbol': 'circle',
-        'size': 10,
-    },
-    IndexCategory.QUERY: {
-        'color': 'red',
-        'opacity': 1,
-        'symbol': 'cross',
-        'size': 15,
-    },
-    IndexCategory.RETRIEVED: {
-        'color': 'green',
-        'opacity': 1,
-        'symbol': 'star',
-        'size': 15,
-    },
-    IndexCategory.SUB_QUERY: {
-        'color': 'purple',
-        'opacity': 1,
-        'symbol': 'square',
-        'size': 15,
-    },
-    IndexCategory.HYPOTHETICAL_ANSWER: {
-        'color': 'purple',
-        'opacity': 1,
-        'symbol': 'square',
-        'size': 15,
-    },
-}
-
-# 3D
-plot3d_settings = {
-    IndexCategory.CHUNK: {
-        'color': 'blue',
-        'opacity': 0.5,
-        'symbol': 'circle',
-        'size': 10,
-    },
-   IndexCategory.QUERY: {
-        'color': 'red',
-        'opacity': 1,
-        'symbol': 'circle',
-        'size': 15,
-    },
-    IndexCategory.RETRIEVED: {
-        'color': 'green',
-        'opacity': 1,
-        'symbol': 'diamond',
-        'size': 10,
-    },
-    IndexCategory.SUB_QUERY: {
-        'color': 'purple',
-        'opacity': 1,
-        'symbol': 'square',
-        'size': 10,
-    },
-    IndexCategory.HYPOTHETICAL_ANSWER: {
-        'color': 'purple',
-        'opacity': 1,
-        'symbol': 'square',
-        'size': 10,
-    },
-}
 
 class RAGmapError(Exception):
     """
     Raised any time RAGmap fails.
     """
 
-# General
-T = TypeVar("T")
-OneOrMany = Union[T, List[T]]
-
-# Vectors + Embeddings
-Vector = Union[Sequence[float], Sequence[int]]
-VectorDB = chromadb.Collection
-Embedding = Vector
-Embeddings = List[Embedding]
-
 class RAGmap(BaseModel):
     """
-    RAGmap class for visualizing and exploring embeddings
+    RAGmap class for visualizing and exploring embeddings.
     """
     text_splitter: Any
     embedding_model: str
     provider: ModelProvider
+    boto3_sess_args: Dict | None = None
+    embed_func_kwargs: Dict | None = None
     collection_metadata: Dict | None = None
     _embedding_function: Optional[chromadb.api.types.EmbeddingFunction] = None
-    _vectordb: Optional[VectorDB] = None
+    _vectordb: Optional[chromadb.Collection] = None
     _last_id: int = 0
 
     def __init__(self, **data):
         logger.info("Initializing RAGmap")
         super().__init__(**data)
-        self._init_embedding_function()
-        self._init_vectordb()
+        self._init_embed_func()
+        self._init_vect_store()
 
-    def _init_embedding_function(self) -> None:
+    def _init_embed_func(self) -> None:
         """
-        Initializes the embedding function based on the model provider.
+        Defines the embedding function based on the selected model provider.
         """
-        logger.info("Initializing embedding function")
+        logger.info("Setting embedding function for provider %s", self.provider.value)
+        if self.embed_func_kwargs is None:
+            self.embed_func_kwargs = {}
         if self.provider == ModelProvider.AMAZON_BEDROCK:
+            if self.boto3_sess_args is None:
+                self.boto3_sess_args = {}
             self._embedding_function = AmazonBedrockEmbeddingFunction(
-                session=self.session,
+                session=boto3.Session(**self.boto3_sess_args),
                 model_name=self.embedding_model,
+                **self.embed_func_kwargs
             )
         elif self.provider == ModelProvider.HUGGING_FACE:
             self._embedding_function = SentenceTransformerEmbeddingFunction(
                 model_name=self.embedding_model,
+                **self.embed_func_kwargs
             )
         elif self.provider == ModelProvider.OPENAI:
             self._embedding_function = OpenAIEmbeddingFunction(
-                api_key=os.environ['OPENAI_API_KEY'],
-                model_name=self.embedding_model
+                model_name=self.embedding_model,
+                **self.embed_func_kwargs
             )
 
-    def _init_vectordb(self) -> None:
+    def _init_vect_store(self) -> None:
         """
-        Initializes the data store.
+        Initializes the vector data store.
         """
-        logger.info("Creating vector database")
+        logger.info("Creating vector store")
         chroma_client = chromadb.Client()
         self._vectordb = chroma_client.create_collection(
             name=uuid.uuid4().hex,
@@ -238,61 +144,13 @@ class RAGmap(BaseModel):
             return self.text_splitter(text)
         raise RAGmapError(f"Text splitter of type {type(self.text_splitter)} is not supported!")
 
-    def load_file(
-        self,
-        f: Any) -> None:
+    def load_file(self, f: Any) -> None:
         """
         Indexes and stores a single file in the vector DB.
         """
-        if isinstance(f, str) and os.path.isfile(f):
-            logger.info("Loading file %s", f)
-            _, f_ext = os.path.splitext(f)
-            # PDF
-            if f_ext == ".pdf":
-                f = PdfReader(f)
-            # DOCX
-            elif f_ext == ".docx":
-                f = Document(f)
-            # PPTX
-            elif f_ext == ".pptx":
-                f = Presentation(f)
-            else:
-                raise RAGmapError(f"{f_ext} files are not supported!")
-        else:
-            raise RAGmapError(f"File {f} not found!")
-
-        # Extract text from file
-        logger.info("Extracting text from file")
-        if isinstance(f, PdfReader):
-            texts = [p.extract_text().strip() for p in f.pages]
-        elif isinstance(f, type(Document)):
-            texts = [paragraph.text for paragraph in f.paragraphs]
-        elif isinstance(f, type(Presentation)):
-            texts = [shape.text for slide in f.slides \
-                                    for shape in slide.shapes \
-                                        if hasattr(shape, "text")]
-
-        # Get document metadata
-        # Adapted from https://stackoverflow.com/a/62022443
-        logger.info("Retrieving document metadata")
-        if isinstance(f, Union[type(Document), type(Presentation)]):
-            metadata = {}
-            fprops = f.core_properties
-            metadata['author'] = fprops.author
-            metadata['category'] = fprops.category
-            metadata['comments'] = fprops.comments
-            metadata['content_status'] = fprops.content_status
-            metadata['created'] = fprops.created
-            metadata['identifier'] = fprops.identifier
-            metadata['keywords'] = fprops.keywords
-            metadata['last_modified_by'] = fprops.last_modified_by
-            metadata['language'] = fprops.language
-            metadata['modified'] = fprops.modified
-            metadata['subject'] = fprops.subject
-            metadata['title'] = fprops.title
-            metadata['version'] = fprops.version
-        elif isinstance(f, PdfReader):
-            metadata = f.metadata
+        # Process file
+        logger.info("Loading >>> %s", f)
+        texts, metadata = process_file(f)
 
         # Split text into chunks
         logger.info("Splitting text into chunks")
@@ -300,7 +158,7 @@ class RAGmap(BaseModel):
         chunks = self._split_text(text)
 
         # Store everything in the vector database
-        logger.info("Storing data in vector database")
+        logger.info("Storing data in the vector database")
         self._vectordb.add(
             ids=list(map(str, range(self._last_id, self._last_id + len(chunks)))),
             documents=chunks,
@@ -308,14 +166,12 @@ class RAGmap(BaseModel):
         )
         self._last_id += len(chunks)
 
-    def load_files(
-        self,
-        paths: OneOrMany[str]):
+    def load_files(self, fs: List[str]) -> None:
         """
-        Indexes and stores one or multiple files in the vector DB.
+        Indexes and stores multiple files in the vector database.
         """
-        for path in paths:
-            self.load_file(path)
+        for f in fs:
+            self.load_file(f)
 
     def query(  # pylint: disable=too-many-arguments
         self,
@@ -344,106 +200,41 @@ class RAGmap(BaseModel):
 
     def _fit_transform(
         self,
-        dim_red_method: DimensionReduction = DimensionReduction.UMAP,
+        dim_redux: DimensionReduction = DimensionReduction.UMAP,
         n_components: int = 2,
         **kwargs):
         """
-        Generates a dimensionality reduction transform.
+        Generates a dimensionality reduction transform from a collection og embeddings.
         """
         logger.info("Retrieving vectors from datastore")
         embeddings = np.array(self._vectordb.get(include=['embeddings'])['embeddings'])
 
-        # Fit embeddings
         logger.info("Fitting embeddings")
-        dim_red = dim_red_method.value(
+        return dim_redux.value(
             n_components=n_components,
             **kwargs
-        )
-        transform = dim_red.fit(embeddings)
-        return transform
+        ).fit(embeddings)
 
     def _create_projections(
         self,
-        dim_red_method: DimensionReduction = DimensionReduction.UMAP,
+        dim_redux: DimensionReduction = DimensionReduction.UMAP,
         n_components: int = 2,
         **kwargs):
         """
-        Uses dimensionality reduction techniques to create embedding projections.
+        Uses dimensionality reduction techniques to project an embedding collection.
         """
-        embeddings = np.array(self._vectordb.get(include=['embeddings'])['embeddings'])
-        logger.info("Generating %iD %s projections", n_components, dim_red_method.value.__name__)
-        return self._fit_transform(dim_red_method, n_components, **kwargs).transform(embeddings)
-
-    def _create_figure(
-        self,
-        df: pd.DataFrame,
-        dim_red_method: DimensionReduction,
-        n_components: int):
-        """
-        Creates a Plotly figure from a Pandas dataframe.
-        """
-        fig = go.Figure()
-        for category in df['category'].unique():
-            df_cat = df[df['category'] == category]
-            # 2D
-            if n_components == 2:
-                category_settings = plot_settings[category]
-                trace = go.Scatter(
-                    x=df_cat['x'],
-                    y=df_cat['y'],
-                    mode="markers",
-                    name=category.value,
-                    marker={
-                        'color': category_settings['color'],
-                        'opacity': category_settings['opacity'],
-                        'symbol': category_settings['symbol'],
-                        'size': category_settings['size'],
-                        'line_width': 0
-                    },
-                    hoverinfo="text",
-                    text=df_cat['document_cleaned']
-                )
-            elif n_components == 3:
-                category_settings = plot3d_settings[category]
-                trace = go.Scatter3d(
-                    x=df_cat['x'],
-                    y=df_cat['y'],
-                    z=df_cat['z'],
-                    mode="markers",
-                    name=category.value,
-                    marker={
-                        'color': category_settings['color'],
-                        'opacity': category_settings['opacity'],
-                        'symbol': category_settings['symbol'],
-                        'size': category_settings['size'],
-                        'line_width': 0
-                    },
-                    hoverinfo="text",
-                    text=df_cat['document_cleaned']
-                )
-            fig.add_trace(trace)
-
-        fig.update_layout(
-            title={
-                'text': f"<sup>{self.provider.value} | {self.embedding_model} | {n_components}D {dim_red_method.value.__name__}</sup>",  # pylint: disable=line-too-long
-                'x': 0.5,
-                'xanchor': 'center'
-            },
-            legend={
-                'x': 0.5,
-                'xanchor': "center",
-                'yanchor': "bottom",
-                'orientation': "h"
-            }
+        embeddings = np.array(
+            self._vectordb.get(include=['embeddings'])['embeddings']
         )
-        return fig
+        logger.info("Generating %iD %s projections", n_components, dim_redux.value.__name__)
+        return self._fit_transform(dim_redux, n_components, **kwargs).transform(embeddings)
 
-    def plot(
+    def plot(  # pylint: disable=too-many-locals
         self,
-        dim_red_method: DimensionReduction = DimensionReduction.UMAP,
+        dim_redux: DimensionReduction = DimensionReduction.UMAP,
         n_components: int = 2,
         query: Dict | None = None,
-        dim_red_method_config: Dict | None = None):
+        dim_redux_config: Dict | None = None) -> go.Figure:
         """
         Creates a 2D or 3D plot of the reduced embedding space.
         """
@@ -459,15 +250,15 @@ class RAGmap(BaseModel):
         documents = data['documents']
 
         # Generate projections
-        if dim_red_method_config is None:
-            dim_red_method_config = {}
+        if dim_redux_config is None:
+            dim_redux_config = {}
         projections = self._create_projections(
-            dim_red_method,
+            dim_redux,
             n_components=n_components,
-            **dim_red_method_config
+            **dim_redux_config
         )
 
-        # Run the query and get the result IDs
+        # Run query and process results
         if query is not None:
             logger.info("Running query\n%s", query)
             retrieved_ids = []
@@ -477,20 +268,20 @@ class RAGmap(BaseModel):
             retrieved_ids = []
 
         # Prepare dataframe
-        logger.info("Preparing dataframe")
+        logger.info("Preparing dataframe for visualization")
         df = pd.DataFrame({
             'id': [int(id) for id in ids],
             'x': projections[:, 0],
             'y': projections[:, 1],
             'z': projections[:, 2] if n_components == 3 else None,
             'document_cleaned': [
-                "<br>".join(wrap(doc, 100))
+                "<br>".join(wrap(doc, wrap_width))
                     for doc in documents
             ],
             'category': IndexCategory.CHUNK
         })
 
-        # Mark retrieved IDs
+        # Flag retrieved chunks
         df.loc[df['id'].isin(retrieved_ids), 'category'] = IndexCategory.RETRIEVED
 
         # Add query projections
@@ -503,7 +294,7 @@ class RAGmap(BaseModel):
                 )
             )
             query_projs = self._fit_transform(
-                dim_red_method,
+                dim_redux,
                 n_components
             ).transform(query_embeddings)
             df_query = pd.DataFrame({
@@ -511,8 +302,16 @@ class RAGmap(BaseModel):
                 'y': query_projs[:, 1],
                 'z': query_projs[:, 2] if n_components == 3 else None,
                 'document_cleaned': query.get('query_texts', None),
-                'category': IndexCategory.QUERY
+                'category': [IndexCategory.QUERY] + \
+                    		[IndexCategory.SUB_QUERY]*(len(query_projs) - 1)
             })
             df = pd.concat([df, df_query], axis=0)
 
-        return self._create_figure(df, dim_red_method, n_components)
+		# Create visualization
+        return plot_projections(
+            df,
+            self.provider,
+            self.embedding_model,
+            dim_redux,
+            n_components
+        )
