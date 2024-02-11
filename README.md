@@ -11,7 +11,7 @@ RAGmap is a simple RAG visualization tool for exploring document chunks and quer
 * 🌐 Try the [live demo](https://ragmap.streamlit.app/) hosted on Streamlit Community Cloud.
 * 📢 RAGmap now supports [Hugging Face 🤗](https://huggingface.co) models!
 
-<img src="images/ragmap_hf_support.gif" width="75%"/>
+<img src="https://github.com/JGalego/RAGmap/raw/main/images/ragmap_hf_support.gif" width="75%"/>
 
 ## What's inside?
 
@@ -40,7 +40,7 @@ RAGmap supports the following features:
 
 ☝️⚠️ **Important notice:** As of January 2024, chromadb's `AmazonBedrockEmbeddingFunction` only works with Titan models. Feel free to upvote this [PR](https://github.com/chroma-core/chroma/pull/1675) to add support for [Cohere Embed models](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html).
 
-<img src="images/ragmap.gif" width="75%"/>
+<img src="https://github.com/JGalego/RAGmap/raw/main/images/ragmap.gif" width="75%"/>
 
 ## Prerequisites
 
@@ -50,7 +50,7 @@ Enable access to the embedding ([Titan Embeddings](https://docs.aws.amazon.com/b
 
 > For more information on how to request model access, please refer to the [Amazon Bedrock User Guide](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html) (**Set up > Model access**)
 
-<img src="images/bedrock_model_access.png" width="75%"/>
+<img src="https://github.com/JGalego/RAGmap/raw/main/images/bedrock_model_access.png" width="75%"/>
 
 ## How to use
 
@@ -94,7 +94,7 @@ Enable access to the embedding ([Titan Embeddings](https://docs.aws.amazon.com/b
 
 ## Example: [Amazon shareholder letters](https://medium.com/@austenallred/every-amazon-shareholder-letter-as-downloadable-pdf-4eb2ae886018)
 
-<img src="images/amazon_shareholder_letters.png" width="70%">
+<img src="https://github.com/JGalego/RAGmap/raw/main/images/amazon_shareholder_letters.png" width="70%">
 
 ## References
 
