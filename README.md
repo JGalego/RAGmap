@@ -6,9 +6,10 @@ RAGmap is a simple RAG visualization tool for exploring document chunks and quer
 
 > Inspired by DeepLearning.ai's short course on [Advanced Retrieval for AI with Chroma](https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/) and Gabriel Chua's award-winning [RAGxplorer](https://github.com/gabrielchua/RAGxplorer).
 
-🌐 **NEW:** Try the [live demo](https://ragmap.streamlit.app/) hosted on Streamlit Community Cloud.
-
-📢 **NEW:** RAGmap now supports [Hugging Face 🤗](https://huggingface.co) models!
+**Updates:**
+* 👨‍💻 [RAGmap](https://pypi.org/project/ragmap) is now available as a standalone Python package!
+* 🌐 Try the [live demo](https://ragmap.streamlit.app/) hosted on Streamlit Community Cloud.
+* 📢 RAGmap now supports [Hugging Face 🤗](https://huggingface.co) models!
 
 <img src="images/ragmap_hf_support.gif" width="75%"/>
 
@@ -41,15 +42,17 @@ RAGmap supports the following features:
 
 <img src="images/ragmap.gif" width="75%"/>
 
-## How to use
+## Prerequisites
 
-### Prerequisites
+### Amazon Bedrock
 
 Enable access to the embedding ([Titan Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html), [Cohere Embed](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html)) and text ([Anthropic Claude](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-claude.html)) models via Amazon Bedrock.
 
 > For more information on how to request model access, please refer to the [Amazon Bedrock User Guide](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html) (**Set up > Model access**)
 
 <img src="images/bedrock_model_access.png" width="75%"/>
+
+## How to use
 
 ### Option 1 💻
 
@@ -76,6 +79,18 @@ Enable access to the embedding ([Titan Embeddings](https://docs.aws.amazon.com/b
 	```
 
 2. Once the service is up and running, head over to http://localhost:8501
+
+## Option 3 👨‍💻
+
+1. Install the `ragmap` package
+
+	```
+	pip install ragmap
+	```
+
+2. Start building your own apps.
+
+	> Check out the [examples](examples) folder to get started!
 
 ## Example: [Amazon shareholder letters](https://medium.com/@austenallred/every-amazon-shareholder-letter-as-downloadable-pdf-4eb2ae886018)
 
