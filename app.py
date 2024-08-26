@@ -167,9 +167,10 @@ def list_embedding_models():
     try:
         # Filter out provisioned throughput only models
         # https://docs.aws.amazon.com/bedrock/latest/userguide/prov-throughput-models.html
-        return [model for model in bedrock.list_foundation_models(
-                                        byOutputModality='EMBEDDING')['modelSummaries'] \
-                                            if model['inferenceTypesSupported'] != ["PROVISIONED"]]
+        return bedrock.list_foundation_models(
+            byOutputModality='EMBEDDING',
+            byInferenceType='ON_DEMAND'
+        )['modelSummaries']
     except (botocore.exceptions.ClientError, botocore.exceptions.NoCredentialsError) as error:
         st.error(error)
     except NameError:
@@ -486,19 +487,18 @@ def plot_projections(df_projs):
     return fig
 
 
-def multiple_queries_expansion(user_query, df_query_original, model_id='anthropic.claude-v2:1'):
+def multiple_queries_expansion(user_query, df_query_original, model_id="anthropic.claude-3-sonnet-20240229-v1:0"):
     """
     Expands a user query by creating multiple sub-queries
     """
-    prompt = f"""
-System: Given a query, your task is to generate 3 to 5 simple sub-queries related to the original query. These sub-queries must be short. Format your reply in JSON with numbered keys. Skip the preamble.
-
-Human: "{user_query}"
-
-Assistant:
-"""  # pylint: disable=line-too-long
     body = body = json.dumps({
-        "prompt": prompt, "max_tokens_to_sample": 1000
+        'anthropic_version': "bedrock-2023-05-31",
+        'messages': [{
+            'role': "user",
+            'content': f"Generate 3-5 sub-queries related to the query below. Format your reply in JSON with numbered keys.\n\n<query>\n{user_query}\n</query>\n\n```json"
+        }],
+        'max_tokens': 1000,
+        'stop_sequences': ["```"]
     })
     try:
         response = bedrock_runtime.invoke_model(
@@ -507,7 +507,7 @@ Assistant:
             accept="application/json",
             contentType="application/json"
         )
-        output = json.loads(response.get("body").read())['completion']
+        output = json.loads(response.get("body").read())['content'][0]['text']
         st.session_state.query_expansions = list(json.loads(output).values())
         st.session_state.query_expansion_projections = np.array([
             project_embeddings(
@@ -536,7 +536,7 @@ Assistant:
         return [user_query], df_query_original
 
 
-def generated_answer_expansion(user_query, df_query_original, model_id='anthropic.claude-v2:1'):
+def generated_answer_expansion(user_query, df_query_original, model_id="anthropic.claude-3-sonnet-20240229-v1:0"):
     """
     Expands a user query by generating an hypothetical answer
 
@@ -544,10 +544,8 @@ def generated_answer_expansion(user_query, df_query_original, model_id='anthropi
     + (Gao et al., 2022) Precise Zero-Shot Dense Retrieval without Relevance Labels
     https://paperswithcode.com/paper/precise-zero-shot-dense-retrieval-without
     """
-    system_msg = "Given a query, your task is to generate a template for the hypothetical answer. Do not include any facts, and instead label them as <PLACEHOLDER>. Skip the preamble."  # pylint: disable=line-too-long
     prompt = ChatPromptTemplate.from_messages([
-        ("system", system_msg),
-        ("human", "\"{user_query}\"")
+        ("human", "Generate an hypothetical answer for the following query. Do not include any facts, and instead label them as <PLACEHOLDER>. Keep it short.\n\n<query>\n{user_query}\n</query>\n\nAnswer: ")
     ])
     model = ChatBedrock(model_id=model_id)
     output_parser = StrOutputParser()
