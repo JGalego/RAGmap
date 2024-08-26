@@ -6,16 +6,15 @@ RAGmap is a simple RAG visualization tool for exploring document chunks and quer
 
 > Inspired by DeepLearning.ai's short course on [Advanced Retrieval for AI with Chroma](https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/) and Gabriel Chua's award-winning [RAGxplorer](https://github.com/gabrielchua/RAGxplorer).
 
-🌐 **NEW:** Try the [live demo](https://ragmap.streamlit.app/) hosted on Streamlit Community Cloud.
-
-📢 **NEW:** RAGmap now supports [Hugging Face 🤗](https://huggingface.co) models!
-
 <img src="images/ragmap_hf_support.gif" width="75%"/>
 
 ## What's inside?
 
 RAGmap supports the following features:
 
+* Multiple vector stores
+	- ChromaDB
+	- LanceDB (NEW)
 * Multiple document formats 📄
 	- `PDF`
 	- `DOCX`
@@ -62,7 +61,11 @@ Enable access to the embedding ([Titan Embeddings](https://docs.aws.amazon.com/b
 2. Run the application
 
 	```
+	# ChromaDB
 	streamlit run app.py
+
+	# LanceDB (experimental)
+	streamlit run app_lancedb.py
 	```
 
 3. Point your browser to http://localhost:8501

@@ -1,0 +1,875 @@
+# pylint: disable=line-too-long,redefined-outer-name,wrong-import-position
+r"""
+   ___  ___  _____              
+  / _ \/ _ |/ ___/_ _  ___ ____ 
+ / , _/ __ / (_ /  ' \/ _ `/ _ \
+/_/|_/_/ |_\___/_/_/_/\_,_/ .__/ LanceDB edition
+                         /_/
+            ___,
+       _.-'` __|__
+     .'  ,-:` \;',`'-,
+    /  .'-;_,;  ':-;_,'.
+   /  /;   '/    ,  _`.-\
+  |  | '`. (`     /` ` \`|
+  |  |:.  `\`-.   \_   / |
+  |  |     (   `,  .`\ ;'|
+   \  \     | .'     `-'/
+    \  `.   ;/        .'
+     '._ `'-._____.-'`
+        `-.____|
+          _____|_____
+    jgs  /___________\
+
+A simple Streamlit application that helps visualize document chunks and queries in embedding space.
+"""
+
+import io
+import json
+import uuid
+
+from textwrap import wrap
+
+import boto3
+import botocore
+import lancedb
+
+import numpy as np
+import pandas as pd
+import plotly.graph_objs as go
+import streamlit as st
+
+from lancedb.embeddings import get_registry
+
+from lancedb.pydantic import (
+	LanceModel,
+	Vector
+)
+
+from langchain.prompts import ChatPromptTemplate
+
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+from langchain_aws import ChatBedrock
+
+from langchain_core.output_parsers import StrOutputParser
+
+from openTSNE import TSNE
+
+from sklearn.decomposition import PCA
+
+from umap import UMAP
+
+#############
+# Constants #
+#############
+
+# State
+state_vars = [
+    "table",
+    "documents",
+    "projections",
+    "query_projections",
+    "retrieved_ids"
+]
+
+# Distance Metrics
+distance_metrics = {
+    "Euclidean / L2 distance": "l2",
+    "Cosine Similarity": "cosine",
+    "Dot Product": "dot"
+}
+
+# 2D
+plot_settings = {
+    'chunk': {
+        'color': 'blue',
+        'opacity': 0.5,
+        'symbol': 'circle',
+        'size': 10,
+    },
+    'query': {
+        'color': 'red',
+        'opacity': 1,
+        'symbol': 'cross',
+        'size': 15,
+    },
+    'retrieved': {
+        'color': 'green',
+        'opacity': 1,
+        'symbol': 'star',
+        'size': 15,
+    },
+    'sub-query': {
+        'color': 'purple',
+        'opacity': 1,
+        'symbol': 'square',
+        'size': 15,
+    },
+    'hypothetical answer': {
+        'color': 'purple',
+        'opacity': 1,
+        'symbol': 'square',
+        'size': 15,
+    },
+}
+
+# 3D
+plot3d_settings = {
+    'chunk': {
+        'color': 'blue',
+        'opacity': 0.5,
+        'symbol': 'circle',
+        'size': 10,
+    },
+    'query': {
+        'color': 'red',
+        'opacity': 1,
+        'symbol': 'circle',
+        'size': 15,
+    },
+    'retrieved': {
+        'color': 'green',
+        'opacity': 1,
+        'symbol': 'diamond',
+        'size': 10,
+    },
+    'sub-query': {
+        'color': 'purple',
+        'opacity': 1,
+        'symbol': 'square',
+        'size': 10,
+    },
+    'hypothetical answer': {
+        'color': 'purple',
+        'opacity': 1,
+        'symbol': 'square',
+        'size': 10,
+    },
+}
+
+################
+# Helper Utils #
+################
+
+st.cache_data()
+def list_embedding_models():
+    """
+    Returns a list of embedding models available in Amazon Bedrock
+    """
+    try:
+        # Filter out provisioned throughput only models
+        # https://docs.aws.amazon.com/bedrock/latest/userguide/prov-throughput-models.html
+        return bedrock.list_foundation_models(
+            byOutputModality='EMBEDDING',
+            byInferenceType='ON_DEMAND'
+        )['modelSummaries']
+    except (botocore.exceptions.ClientError, botocore.exceptions.NoCredentialsError) as error:
+        st.error(error)
+    except NameError:
+        pass
+    return []
+
+
+st.cache_data()
+def list_text_models():
+    """
+    Returns a list of text models available in Amazon Bedrock
+    """
+    try:
+        return bedrock.list_foundation_models(
+            byOutputModality='TEXT',
+            byInferenceType='ON_DEMAND'
+        )['modelSummaries']
+    except (botocore.exceptions.ClientError, botocore.exceptions.NoCredentialsError) as error:
+        st.error(error)
+    except NameError:
+        pass
+    return []
+
+
+st.cache_data()
+def model2table(model):
+    """
+    Turns a model summary into a table
+    """
+    if model is None:
+        return None
+
+    model_status = model['modelLifecycle']['status']
+    model_status = "✅" if model_status == "ACTIVE" else "👴" if model_status == "LEGACY" else "❓"
+
+    input_modalities = model['inputModalities']
+    input_modalities = "".join(
+        map(
+            lambda inp: "💬" if inp == "TEXT" else "🖼️" if inp == "IMAGE" else "❓",
+            input_modalities
+        )
+    )
+
+    return f"""
+<table style="margin: 0px auto;">
+    <tr>
+        <td>
+            <b>Model ID</b>
+        </td>
+        <td>
+            <tt>{model['modelId']}</tt>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <b>Model Name</b>
+        </td>
+        <td>
+            {model['modelName']}
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <b>Input Modalities</b>
+        </td>
+        <td>
+            {input_modalities}
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <b>Output Modalities</b>
+        </td>
+        <td>
+            {", ".join(model['outputModalities'])}
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <b>Inference Types</b>
+        </td>
+        <td>
+            {", ".join(model['inferenceTypesSupported'])}
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <b>Model Lifecycle</b>
+        </td>
+        <td>
+            {model_status}
+        </td>
+    </tr>
+</table>
+
+#####
+"""
+
+
+def process_document(filename):
+    """
+    Loads and extracts text from a document
+    """
+    # PDF
+    mime_type = filename.type
+    if mime_type == "application/pdf":
+        from PyPDF2 import PdfReader  # pylint: disable=import-outside-toplevel
+        doc = PdfReader(filename)
+        texts = [p.extract_text().strip() for p in doc.pages]
+    # DOCX
+    elif mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        from docx import Document  # pylint: disable=import-outside-toplevel
+        doc = Document(filename)
+        texts = [paragraph.text for paragraph in doc.paragraphs]
+    # PPTX
+    elif mime_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+        from pptx import Presentation  # pylint: disable=import-outside-toplevel
+        doc = Presentation(filename)
+        texts = [shape.text for slide in doc.slides \
+                                for shape in slide.shapes \
+                                    if hasattr(shape, "text")]
+
+    # Filter out empty strings
+    texts = [text for text in texts if text]
+    return texts
+
+
+def chunk_texts(texts):
+    """
+    Breaks down input texts into chunks
+    """
+    character_splitter = RecursiveCharacterTextSplitter(
+        separators=["\n\n", "\n", ". ", " ", ""],
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap
+    )
+    chunks = character_splitter.split_text('\n\n'.join(texts))
+    return chunks
+
+
+def embedding_function():
+    """
+    Specifies the embedding function
+    """
+    if model_provider == "Amazon Bedrock ⛰️":
+        st.session_state.embedding_function = get_registry().get('bedrock-text').create(name=embedding_model['modelId'])
+    elif model_provider == "HuggingFace 🤗":
+        st.session_state.embedding_function = get_registry().get('huggingface').create(name=embedding_model)
+    elif model_provider == "OpenAI ֎":
+        st.session_state.embedding_function = get_registry().get('openai').create(name=embedding_model)
+
+def build_vector_store():
+    """
+    Creates and populates a vector store.
+    """
+    # Load and extract text from PDF document
+    with st.spinner("Loading document"):
+        texts = process_document(uploaded_file)
+
+    # Split text into chunks
+    with st.spinner("Splitting text into chunks"):
+        chunks = chunk_texts(texts)
+
+    # Create and populate the vector store
+    with st.spinner("Creating vector store"):
+        document_name = uuid.uuid4().hex
+        database = lancedb.connect(document_name)
+
+        class Embeddings(LanceModel):
+            """Embeddings table schema"""
+            id: int
+            document: str = st.session_state.embedding_function.SourceField()
+            embeddings: Vector(
+                st.session_state.embedding_function.ndims()
+            ) = st.session_state.embedding_function.VectorField() # type: ignore
+
+        table = database.create_table("chunk_table", schema=Embeddings, mode="overwrite")
+
+    with st.spinner("Populating vector store"):
+        table.add([{'id': id, 'document': chunk} for id, chunk in enumerate(chunks)])
+
+    st.session_state.table = table
+
+
+def get_embeddings(text):
+    """
+    Transforms input text into embeddings
+    """
+    text_embeddings = st.session_state.embedding_function.compute_source_embeddings([text])
+    return text_embeddings
+
+
+def project_embeddings(embeddings, transform):
+    """
+    Projects text embeddings using a transform
+    """
+    if isinstance(embeddings, list):
+        embeddings = np.array(embeddings)
+    projs = np.empty((len(embeddings), n_components))
+    projs = transform.transform(embeddings)
+    return projs
+
+
+def create_projections():
+    """
+    Transforms document embeddings into projections
+    """
+    if st.session_state.table is None:
+        return
+
+    # Get documents and embeddings
+    with st.spinner("Retrieving document and embeddings"):
+        res = st.session_state.table.to_pandas()
+        st.session_state.ids = res['id'].tolist()
+        st.session_state.embeddings = res['embeddings'].tolist()
+        st.session_state.documents = res['document'].tolist()
+
+    # Fit projection transform
+    with st.spinner("Fitting embeddings"):
+        if st.session_state.dimension_reduction == "UMAP":
+            transform = UMAP(
+                random_state=0, transform_seed=0, n_components=st.session_state.n_components
+            ).fit(st.session_state.embeddings)
+        elif st.session_state.dimension_reduction == "t-SNE":
+            transform = TSNE(
+                random_state=0, n_components=st.session_state.n_components
+            ).fit(st.session_state.embeddings)
+        elif st.session_state.dimension_reduction == "PCA":
+            transform = PCA(
+                random_state=0, n_components=st.session_state.n_components
+            ).fit(st.session_state.embeddings)
+        st.session_state.transform = transform
+
+    # Get projections
+    with st.spinner("Generating projections"):
+        st.session_state.projections = transform.transform(st.session_state.embeddings)
+
+
+def plot_projections(df_projs):
+    """
+    Generates a 2D or 3D plot of embedding projections
+    """
+    if uploaded_file is None:
+        return
+
+    fig = go.Figure()
+    for category in df['category'].unique():
+        df_cat = df_projs[df_projs['category'] == category]
+        # 2D
+        if n_components == 2:
+            category_settings = plot_settings[category]
+            trace = go.Scatter(
+                x=df_cat['x'],
+                y=df_cat['y'],
+                mode='markers',
+                name=category,
+                marker={
+                    'color': category_settings['color'],
+                    'opacity': category_settings['opacity'],
+                    'symbol': category_settings['symbol'],
+                    'size': category_settings['size'],
+                    'line_width': 0
+                },
+                hoverinfo='text',
+                text=df_cat['document_cleaned']
+            )
+        # 3D
+        elif n_components == 3:
+            category_settings = plot3d_settings[category]
+            trace = go.Scatter3d(
+                x=df_cat['x'],
+                y=df_cat['y'],
+                z=df_cat['z'],
+                mode="markers",
+                name=category,
+                marker={
+                    'color': category_settings['color'],
+                    'opacity': category_settings['opacity'],
+                    'symbol': category_settings['symbol'],
+                    'size': category_settings['size'],
+                    'line_width': 0
+                },
+                hoverinfo='text',
+                text=df_cat['document_cleaned']
+            )
+
+        fig.add_trace(trace)
+
+    fig.update_layout(
+        title={
+            'text': f"{uploaded_file.name} <br><sup>{model_provider} | {embedding_model['modelName'] if model_provider == 'Amazon Bedrock ⛰️' else embedding_model if model_provider == 'HuggingFace 🤗' else None} | ({chunk_size}, {chunk_overlap}) chunks | {n_components}D {dimension_reduction}</sup>",  # pylint: disable=line-too-long
+            'x': 0.5,
+            'xanchor': 'center'
+        },
+        legend={
+            'x': 0.5,
+            'xanchor': "center",
+            'yanchor': "bottom",
+            'orientation': "h"
+        }
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+    return fig
+
+
+def multiple_queries_expansion(user_query, df_query_original, model_id="anthropic.claude-3-sonnet-20240229-v1:0"):
+    """
+    Expands a user query by creating multiple sub-queries
+    """
+    body = body = json.dumps({
+        'anthropic_version': "bedrock-2023-05-31",
+        'messages': [{
+            'role': "user",
+            'content': f"Generate 3-5 sub-queries related to the query below. Format your reply in JSON with numbered keys.\n\n<query>\n{user_query}\n</query>\n\n```json"
+        }],
+        'max_tokens': 1000,
+        'stop_sequences': ["```"]
+    })
+    try:
+        response = bedrock_runtime.invoke_model(
+            modelId=model_id,
+            body=body,
+            accept="application/json",
+            contentType="application/json"
+        )
+        output = json.loads(response.get("body").read())['content'][0]['text']
+        st.session_state.query_expansions = list(json.loads(output).values())
+        st.session_state.query_expansion_projections = np.array([
+            project_embeddings(
+                get_embeddings(expansion),
+                st.session_state.transform
+            ) for expansion in st.session_state.query_expansions
+        ])
+
+        df_query_expansions = pd.DataFrame({
+            'x': st.session_state.query_expansion_projections[:, 0, 0],
+            'y': st.session_state.query_expansion_projections[:, 0, 1],
+            'z': st.session_state.query_expansion_projections[:, 0, 2] \
+                    if n_components == 3 else None,
+            'document_cleaned': st.session_state.query_expansions,
+            'category': ["sub-query"] * len(st.session_state.query_expansions),
+        })
+
+        df_query_expanded = pd.concat([df_query_original, df_query_expansions])
+        return st.session_state.query_expansions, df_query_expanded
+    except botocore.exceptions.ClientError as error:
+        st.error(error)
+        st.warning("Failed to expand query, falling back to the naive approach!")
+        return [user_query], df_query_original
+    except json.decoder.JSONDecodeError:
+        st.warning("Failed to expand query, falling back to the naive approach!")
+        return [user_query], df_query_original
+
+
+def generated_answer_expansion(user_query, df_query_original, model_id="anthropic.claude-3-sonnet-20240229-v1:0"):
+    """
+    Expands a user query by generating an hypothetical answer
+
+    References:
+    + (Gao et al., 2022) Precise Zero-Shot Dense Retrieval without Relevance Labels
+    https://paperswithcode.com/paper/precise-zero-shot-dense-retrieval-without
+    """
+    prompt = ChatPromptTemplate.from_messages([
+        ("human", "Generate an hypothetical answer for the following query. Do not include any facts, and instead label them as <PLACEHOLDER>. Keep it short.\n\n<query>\n{user_query}\n</query>\n\nAnswer: ")
+    ])
+    model = ChatBedrock(model_id=model_id)
+    output_parser = StrOutputParser()
+    chain = prompt | model | output_parser
+    try:
+        output = chain.invoke({"user_query": user_query})
+        st.session_state.query_expansions = [output]
+        st.session_state.query_expansion_projections = np.array([
+            project_embeddings(
+                get_embeddings(expansion),
+                st.session_state.transform
+            ) for expansion in st.session_state.query_expansions
+        ])
+
+        df_query_expansions = pd.DataFrame({
+            'x': st.session_state.query_expansion_projections[:, 0, 0],
+            'y': st.session_state.query_expansion_projections[:, 0, 1],
+            'z': st.session_state.query_expansion_projections[:, 0, 2] \
+                    if n_components == 3 else None,
+            'document_cleaned': [
+                "<br>".join(wrap(doc, 100)) for doc in st.session_state.query_expansions
+            ],
+            'category': ["hypothetical answer"] * len(st.session_state.query_expansions),
+        })
+
+        df_query_expanded = pd.concat([df_query_original, df_query_expansions])
+        return st.session_state.query_expansions, df_query_expanded
+    except botocore.exceptions.ClientError as error:
+        st.error(error)
+    except json.decoder.JSONDecodeError:
+        pass
+    st.warning("Model failed to expand query, falling back to the naive approach!")
+    return [user_query], df_query_original
+
+
+def initialize():
+    """
+    Pre-initializes the session state
+    """
+    for key in state_vars:
+        if key not in st.session_state:
+            st.session_state[key] = None
+
+
+def reset():
+    """
+    Resets session state and re-runs the application
+    """
+    for key in state_vars:
+        st.session_state[key] = None
+
+########
+# Main #
+########
+
+st.set_page_config(
+    page_title = "RAGMap",
+    page_icon="🗺️",
+    menu_items={
+        'Get Help': 'https://github.com/JGalego/RAGmap',
+        'Report a bug': "https://github.com/JGalego/RAGmap/issues",
+        'About': """
+RAGmap [LanceDB edition] is a simple RAG visualization tool for exploring document chunks and queries in embedding space.
+
+It was inspired by DeepLearning.ai's short course on [Advanced Retrieval for AI with Chroma](https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/) and Gabriel Chua's award-winning [RAGxplorer 🦙🦺](https://github.com/gabrielchua/RAGxplorer).
+
+☝️ **Help needed:** feel free to reach out to [JGalego](https://github.com/JGalego) if you want to contribute.
+"""
+    }
+)
+
+st.title("RAGMap 🗺️🔍")
+st.text("From meaning to vectors and back...")
+
+# Initialize session state
+initialize()
+
+# Initialize session
+session = boto3.Session()
+
+# Initialize bedrock clients
+try:
+    bedrock = session.client('bedrock')
+    bedrock_runtime = session.client('bedrock-runtime')
+except botocore.exceptions.NoCredentialsError as error:
+    st.error(error)
+
+st.markdown("### 1. Upload a document 📄")
+
+uploaded_file = st.file_uploader(
+    label="Upload a file",
+    label_visibility="hidden",
+    type=["pdf", "docx", "pptx"],
+    on_change=reset
+)
+
+st.markdown("### 2. Build a vector database 💫")
+
+chunk_size = st.number_input(
+    label="Chunk Size",
+    min_value=1,
+    max_value=2000,
+    value=256,
+    step=1,
+    key="chunk_size",
+    help="Number of tokens in each chunk",
+)
+
+chunk_overlap = st.number_input(
+    label="Chunk Overlap",
+    min_value=0,
+    max_value=1000,
+    value=0,
+    step=1,
+    key="chunk_overlap",
+    help="Number of tokens shared between consecutive chunks to maintain context",
+)
+
+model_provider = st.radio(
+    label="Model Provider",
+    options=[
+        "Amazon Bedrock ⛰️",
+        "OpenAI ֎",
+        "HuggingFace 🤗"
+    ],
+    horizontal=True,
+    index=0,
+    on_change=reset,
+    key="model_provider",
+    help="The company or service that provides/hosts the embedding model",
+)
+
+if model_provider == "Amazon Bedrock ⛰️":
+    embedding_model = st.selectbox(
+        label="Embedding Model",
+        options=list_embedding_models(),
+        index=0,
+        format_func=lambda option: f"{option['modelName']} ({option['modelId']})",
+        on_change=reset,
+        key="embedding_model",
+        help="The model that turns information (text, image, &c.) \
+                into dense vector representations (embeddings)",
+    )
+    st.markdown(model2table(embedding_model), unsafe_allow_html=True)
+elif model_provider == "OpenAI ֎":
+    embedding_model = st.selectbox(
+        label="Embedding Model",
+        options=get_registry().get('openai').model_names(),
+        on_change=reset,
+        key="embedding_model",
+        help="The model that turns information (text, image, &c.) \
+                into dense vector representations (embeddings)",
+    )
+elif model_provider == "HuggingFace 🤗":
+    embedding_model = st.text_input(
+        label="Embedding Model",
+        key="embedding_model",
+        on_change=reset,
+        placeholder="Enter the model name e.g. sentence-transformers/all-MiniLM-L6-v2",
+        value="sentence-transformers/all-MiniLM-L6-v2",
+        help="The model that turns information (text, image, &c.) \
+                into dense vector representations (embeddings)",
+    )
+
+dimension_reduction = st.radio(
+    label="Dimensionality Reduction",
+    options=[
+        "UMAP",
+        "t-SNE",
+        "PCA"
+    ],
+    captions=[
+        "Uniform Manifold Approximation and Projection",
+        "t-distributed Stochastic Neighbor Embedding",
+        "Principal Component Analysis"
+    ],
+    horizontal=True,
+    index=0,
+    on_change=create_projections,
+    key="dimension_reduction",
+    help="The algorithm or technique used to project the embedding space",
+)
+
+# For more information, see
+# https://umap-learn.readthedocs.io/en/latest/parameters.html#n-components
+# https://opentsne.readthedocs.io/en/stable/api/index.html#openTSNE.TSNE
+n_components = st.radio(
+    label="Projection Components",
+    options=[2, 3],
+    horizontal=True,
+    index=0,
+    format_func=lambda option: f"{option}D",
+    on_change=create_projections,
+    key="n_components",
+    help="The dimensionality of the reduced embedding space",
+)
+
+if embedding_model is not None:
+    embedding_function()
+
+if st.button(label="Build"):
+    if uploaded_file is None:
+        st.error("No file uploaded!")
+    elif model_provider == "HuggingFace 🤗" and \
+       len(embedding_model) == 0:
+        st.error("Model name must not be empty!")
+    elif embedding_model is None:
+        st.error("No model selected!")
+    else:
+        if st.session_state.table is None:
+            try:
+                build_vector_store()
+            except ValueError as error:
+                st.error(error)
+
+        if st.session_state.projections is None:
+            create_projections()
+
+if st.session_state.projections is not None:
+
+    st.markdown("### 3. Explore the embedding space 👩‍🚀")
+
+    df = pd.DataFrame({
+        'id': [int(id) for id in st.session_state.ids],
+        'x': st.session_state.projections[:, 0],
+        'y': st.session_state.projections[:, 1],
+        'z': st.session_state.projections[:, 2] if n_components == 3 else None,
+        'document_cleaned': [
+            "<br>".join(wrap(doc, 100))
+                for doc in st.session_state.documents
+        ],
+        'category': "chunk",
+    })
+
+    n_results = st.number_input(
+        label="Number of results",
+        min_value=1,
+        max_value=10,
+        value=5,
+        key='n_results',
+    )
+
+    metric_name = st.radio(
+        label="Distance Metric",
+        options=distance_metrics.keys(),
+        horizontal=True,
+        key="distance_metric",
+    )
+
+    retrieval_strategy = st.radio(
+        label="Retrieval Strategy",
+        options=[
+            "Naive",
+            "Multiple Queries",
+            "Generated Answer",
+        ],
+        captions=[
+            "Retrieves chunks with high similarity to the user query",
+            "Expands the original query by generating additional sub-queries",
+            "Expands the original query by generating an hypothetical answer",
+        ],
+        key='retrieval_strategy',
+    )
+
+    query = st.text_input(
+        label="Query",
+        key='query',
+    )
+
+    if st.button(label="Search"):
+        # Get query projections
+        st.session_state.query_projections = project_embeddings(
+            get_embeddings(query),
+            st.session_state.transform
+        )
+        df_query = pd.DataFrame({
+            'x': st.session_state.query_projections[:, 0],
+            'y': st.session_state.query_projections[:, 1],
+            'z': st.session_state.query_projections[:, 2] if n_components == 3 else None,
+            'document_cleaned': query,
+            'category': "query",
+        })
+
+        # Use the query as is or expand it
+        if retrieval_strategy == "Naive":
+            vectordb_query = [query]
+        elif retrieval_strategy == "Multiple Queries":
+            vectordb_query, df_query = multiple_queries_expansion(query, df_query)
+        elif retrieval_strategy == "Generated Answer":
+            vectordb_query, df_query = generated_answer_expansion(query, df_query)
+
+        # Search query and process results
+        st.session_state.retrieved_ids = []
+        for query in vectordb_query:
+            query_embeddings = get_embeddings(query)
+            results = st.session_state.table.search(query=query)\
+                                            .metric(distance_metrics[metric_name])\
+                                            .limit(n_results)\
+                                            .to_pandas()
+            st.session_state.retrieved_ids.extend(results['id'].tolist())
+        df.loc[df['id'].isin(st.session_state.retrieved_ids), 'category'] = "retrieved"
+
+        # Append query projections
+        df = pd.concat([df, df_query], axis=0)
+
+    # Display all projections
+    st.markdown("#### Projections")
+    proj_plot = plot_projections(df)
+    buffer = io.StringIO()
+    proj_plot.write_html(buffer, include_plotlyjs="cdn")
+    html_bytes = buffer.getvalue().encode()
+
+    # Download plot as HTML
+    st.download_button(
+        label="Download HTML",
+        data=html_bytes,
+        file_name=f"{uploaded_file.name.split('.')[0]}.html",
+        mime="text/html",
+    )
+
+    if st.session_state.retrieved_ids is not None:
+        # Display query results
+        st.markdown("#### Results")
+        st.dataframe(
+            df[df['category'] == "retrieved"].drop(['category'], axis=1),
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                'x': st.column_config.NumberColumn(
+                    width="small"
+                ),
+                'document_cleaned': st.column_config.TextColumn(
+                    "chunk",
+                    width="large"
+                )
+            },
+        )
+
+        # Download query results as CSV
+        st.download_button(
+            label="Download CSV",
+            data=df.to_csv(),
+            file_name="results.csv",
+            mime="text/csv",
+        )
