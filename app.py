@@ -52,7 +52,8 @@ import streamlit as st
 
 from chromadb.utils.embedding_functions import (
     AmazonBedrockEmbeddingFunction,
-    SentenceTransformerEmbeddingFunction
+    SentenceTransformerEmbeddingFunction,
+    OpenAIEmbeddingFunction
 )
 
 from huggingface_hub.utils import RepositoryNotFoundError
@@ -315,6 +316,11 @@ def embedding_function():
         st.session_state.embedding_function = AmazonBedrockEmbeddingFunction(
             session=session,
             model_name=embedding_model['modelId']
+        )
+    elif model_provider == "OpenAI ֎":
+        st.session_state.embedding_function = OpenAIEmbeddingFunction(
+            api_key=os.environ.get('OPENAI_API_KEY'),
+            model_name=embedding_model
         )
     elif model_provider == "HuggingFace 🤗":
         try:
@@ -635,6 +641,7 @@ uploaded_file = st.file_uploader(
     label="Upload a file",
     label_visibility="hidden",
     type=["pdf", "docx", "pptx"],
+    on_change=reset
 )
 
 st.markdown("### 2. Build a vector database 💫")
@@ -663,7 +670,8 @@ model_provider = st.radio(
     label="Model Provider",
     options=[
         "Amazon Bedrock ⛰️",
-        "HuggingFace 🤗"
+        "HuggingFace 🤗",
+        "OpenAI ֎"
     ],
     horizontal=True,
     index=0,
@@ -679,14 +687,29 @@ if model_provider == "Amazon Bedrock ⛰️":
         index=0,
         format_func=lambda option: f"{option['modelName']} ({option['modelId']})",
         key="embedding_model",
+        on_change=reset,
         help="The model that turns information (text, image, &c.) \
                 into dense vector representations (embeddings)",
     )
     st.markdown(model2table(embedding_model), unsafe_allow_html=True)
+elif model_provider == "OpenAI ֎":
+    embedding_model = st.selectbox(
+        label="Embedding Model",
+        options=[
+            "text-embedding-ada-002",
+            "text-embedding-3-small",
+            "text-embedding-3-large"
+		],
+        on_change=reset,
+        key="embedding_model",
+        help="The model that turns information (text, image, &c.) \
+                into dense vector representations (embeddings)",
+    )
 elif model_provider == "HuggingFace 🤗":
     embedding_model = st.text_input(
         label="Embedding Model",
         key="embedding_model",
+        on_change=reset,
         placeholder="Enter the model name e.g. all-MiniLM-L6-v2",
         value="all-MiniLM-L6-v2",
         help="The model that turns information (text, image, &c.) \

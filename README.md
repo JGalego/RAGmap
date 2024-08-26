@@ -20,12 +20,13 @@ RAGmap supports the following features:
 	- `DOCX`
 	- `PPTX`
 * Multiple embedding models
-	- Hugging Face 🤗
 	- Amazon Bedrock ⛰️
 		- [Titan Text Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html)
 		- [Titan Multimodal Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-multiemb-models.html)
 		- [Cohere Embed English](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html)
 		- [Cohere Embed Multilingual](https://aws.amazon.com/blogs/aws/amazon-bedrock-now-provides-access-to-cohere-command-light-and-cohere-embed-english-and-multilingual-models/)
+	- Hugging Face 🤗
+	- OpenAI ֎ (NEW)
 * Dimensionality reduction (2D and 3D)
 	- [UMAP](https://umap-learn.readthedocs.io/en/latest/)
 	- [t-SNE](https://opentsne.readthedocs.io/en/stable/)

@@ -4,6 +4,7 @@ lancedb
 langchain
 langchain-aws
 numpy
+openai
 opentsne
 pandas
 plotly
