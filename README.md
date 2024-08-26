@@ -14,7 +14,7 @@ RAGmap supports the following features:
 
 * Multiple vector stores
 	- ChromaDB
-	- LanceDB (NEW)
+	- LanceDB (NEW!)
 * Multiple document formats 📄
 	- `PDF`
 	- `DOCX`
@@ -26,7 +26,7 @@ RAGmap supports the following features:
 		- [Cohere Embed English](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html)
 		- [Cohere Embed Multilingual](https://aws.amazon.com/blogs/aws/amazon-bedrock-now-provides-access-to-cohere-command-light-and-cohere-embed-english-and-multilingual-models/)
 	- Hugging Face 🤗
-	- OpenAI ֎ (NEW)
+	- OpenAI ֎ (NEW!)
 * Dimensionality reduction (2D and 3D)
 	- [UMAP](https://umap-learn.readthedocs.io/en/latest/)
 	- [t-SNE](https://opentsne.readthedocs.io/en/stable/)
@@ -55,17 +55,17 @@ Enable access to the embedding ([Titan Embeddings](https://docs.aws.amazon.com/b
 
 1. Install dependencies
 
-	```
+	```bash
 	pip install -r requirements.txt
 	```
 
 2. Run the application
 
-	```
+	```bash
 	# ChromaDB
 	streamlit run app.py
 
-	# LanceDB (experimental)
+	# LanceDB (NEW!) 🧪
 	streamlit run app_lancedb.py
 	```
 
@@ -75,7 +75,7 @@ Enable access to the embedding ([Titan Embeddings](https://docs.aws.amazon.com/b
 
 1. Run the following command to start the application
 
-	```
+	```bash
 	docker-compose up
 	```
 
