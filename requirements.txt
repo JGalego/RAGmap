@@ -1,8 +1,10 @@
 boto3
 chromadb
+lancedb
 langchain
 langchain-aws
 numpy
+openai
 opentsne
 pandas
 plotly

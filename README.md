@@ -6,27 +6,27 @@ RAGmap is a simple RAG visualization tool for exploring document chunks and quer
 
 > Inspired by DeepLearning.ai's short course on [Advanced Retrieval for AI with Chroma](https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/) and Gabriel Chua's award-winning [RAGxplorer](https://github.com/gabrielchua/RAGxplorer).
 
-🌐 **NEW:** Try the [live demo](https://ragmap.streamlit.app/) hosted on Streamlit Community Cloud.
-
-📢 **NEW:** RAGmap now supports [Hugging Face 🤗](https://huggingface.co) models!
-
 <img src="images/ragmap_hf_support.gif" width="75%"/>
 
 ## What's inside?
 
 RAGmap supports the following features:
 
+* Multiple vector stores
+	- ChromaDB
+	- LanceDB (NEW!)
 * Multiple document formats 📄
 	- `PDF`
 	- `DOCX`
 	- `PPTX`
 * Multiple embedding models
-	- Hugging Face 🤗
 	- Amazon Bedrock ⛰️
 		- [Titan Text Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html)
 		- [Titan Multimodal Embeddings](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-multiemb-models.html)
 		- [Cohere Embed English](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html)
 		- [Cohere Embed Multilingual](https://aws.amazon.com/blogs/aws/amazon-bedrock-now-provides-access-to-cohere-command-light-and-cohere-embed-english-and-multilingual-models/)
+	- Hugging Face 🤗
+	- OpenAI ֎ (NEW!)
 * Dimensionality reduction (2D and 3D)
 	- [UMAP](https://umap-learn.readthedocs.io/en/latest/)
 	- [t-SNE](https://opentsne.readthedocs.io/en/stable/)
@@ -55,14 +55,18 @@ Enable access to the embedding ([Titan Embeddings](https://docs.aws.amazon.com/b
 
 1. Install dependencies
 
-	```
+	```bash
 	pip install -r requirements.txt
 	```
 
 2. Run the application
 
-	```
+	```bash
+	# ChromaDB
 	streamlit run app.py
+
+	# LanceDB (NEW!) 🧪
+	streamlit run app_lancedb.py
 	```
 
 3. Point your browser to http://localhost:8501
@@ -71,7 +75,7 @@ Enable access to the embedding ([Titan Embeddings](https://docs.aws.amazon.com/b
 
 1. Run the following command to start the application
 
-	```
+	```bash
 	docker-compose up
 	```
 

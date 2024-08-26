@@ -1,9 +1,9 @@
-# pylint: disable=wrong-import-position,redefined-outer-name
+# pylint: disable=line-too-long,redefined-outer-name,wrong-import-position
 r"""
    ___  ___  _____              
   / _ \/ _ |/ ___/_ _  ___ ____ 
  / , _/ __ / (_ /  ' \/ _ `/ _ \
-/_/|_/_/ |_\___/_/_/_/\_,_/ .__/
+/_/|_/_/ |_\___/_/_/_/\_,_/ .__/ LanceDB edition
                          /_/
             ___,
        _.-'` __|__
@@ -21,48 +21,33 @@ r"""
     jgs  /___________\
 
 A simple Streamlit application that helps visualize document chunks and queries in embedding space.
-
-Inspired by DeepLearning.ai's short course on 'Advanced Retrieval for AI with Chroma'
-https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/
-and Gabriel Chua's award-winning RAGxplorer
-https://github.com/gabrielchua/RAGxplorer/
 """
 
 import io
 import json
-import os
-import sys
 import uuid
 
 from textwrap import wrap
 
-# Fix Chroma's low SQLite version issue
-# https://docs.trychroma.com/troubleshooting#sqlite
-__import__('pysqlite3')
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-
 import boto3
 import botocore
-import chromadb
+import lancedb
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
 import streamlit as st
 
-from chromadb.utils.embedding_functions import (
-    AmazonBedrockEmbeddingFunction,
-    SentenceTransformerEmbeddingFunction,
-    OpenAIEmbeddingFunction
-)
+from lancedb.embeddings import get_registry
 
-from huggingface_hub.utils import RepositoryNotFoundError
+from lancedb.pydantic import (
+	LanceModel,
+	Vector
+)
 
 from langchain.prompts import ChatPromptTemplate
 
-from langchain.text_splitter import (
-    RecursiveCharacterTextSplitter
-)
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from langchain_aws import ChatBedrock
 
@@ -80,12 +65,19 @@ from umap import UMAP
 
 # State
 state_vars = [
-    "collection",
+    "table",
     "documents",
     "projections",
     "query_projections",
     "retrieved_ids"
 ]
+
+# Distance Metrics
+distance_metrics = {
+    "Euclidean / L2 distance": "l2",
+    "Cosine Similarity": "cosine",
+    "Dot Product": "dot"
+}
 
 # 2D
 plot_settings = {
@@ -185,7 +177,9 @@ def list_text_models():
     """
     try:
         return bedrock.list_foundation_models(
-            byOutputModality='TEXT')['modelSummaries']
+            byOutputModality='TEXT',
+            byInferenceType='ON_DEMAND'
+        )['modelSummaries']
     except (botocore.exceptions.ClientError, botocore.exceptions.NoCredentialsError) as error:
         st.error(error)
     except NameError:
@@ -314,27 +308,15 @@ def embedding_function():
     Specifies the embedding function
     """
     if model_provider == "Amazon Bedrock ⛰️":
-        st.session_state.embedding_function = AmazonBedrockEmbeddingFunction(
-            session=session,
-            model_name=embedding_model['modelId']
-        )
-    elif model_provider == "OpenAI ֎":
-        st.session_state.embedding_function = OpenAIEmbeddingFunction(
-            api_key=os.environ.get('OPENAI_API_KEY'),
-            model_name=embedding_model
-        )
+        st.session_state.embedding_function = get_registry().get('bedrock-text').create(name=embedding_model['modelId'])
     elif model_provider == "HuggingFace 🤗":
-        try:
-            st.session_state.embedding_function = SentenceTransformerEmbeddingFunction(
-                model_name=embedding_model
-            )
-        except RepositoryNotFoundError as error:
-            st.error(error)
+        st.session_state.embedding_function = get_registry().get('huggingface').create(name=embedding_model)
+    elif model_provider == "OpenAI ֎":
+        st.session_state.embedding_function = get_registry().get('openai').create(name=embedding_model)
 
-
-def build_collection():
+def build_vector_store():
     """
-    Creates and populates a Chroma collection
+    Creates and populates a vector store.
     """
     # Load and extract text from PDF document
     with st.spinner("Loading document"):
@@ -344,33 +326,32 @@ def build_collection():
     with st.spinner("Splitting text into chunks"):
         chunks = chunk_texts(texts)
 
-    # Create and populate chroma collection
-    with st.spinner("Creating collection"):
-        if os.path.exists("embeddings"):
-            # Initialize a persistent chroma client
-            # https://docs.trychroma.com/usage-guide#initiating-a-persistent-chroma-client
-            chroma_client = chromadb.PersistentClient("embeddings")
-        else:
-            chroma_client = chromadb.Client()
+    # Create and populate the vector store
+    with st.spinner("Creating vector store"):
         document_name = uuid.uuid4().hex
-        collection = chroma_client.create_collection(
-            document_name,
-            embedding_function=st.session_state.embedding_function
-        )
-    with st.spinner("Populating collection"):
-        collection.add(
-            ids=list(map(str, range(len(chunks)))),
-            documents=chunks
-        )
+        database = lancedb.connect(document_name)
 
-    st.session_state.collection = collection
+        class Embeddings(LanceModel):
+            """Embeddings table schema"""
+            id: int
+            document: str = st.session_state.embedding_function.SourceField()
+            embeddings: Vector(
+                st.session_state.embedding_function.ndims()
+            ) = st.session_state.embedding_function.VectorField() # type: ignore
+
+        table = database.create_table("chunk_table", schema=Embeddings, mode="overwrite")
+
+    with st.spinner("Populating vector store"):
+        table.add([{'id': id, 'document': chunk} for id, chunk in enumerate(chunks)])
+
+    st.session_state.table = table
 
 
 def get_embeddings(text):
     """
     Transforms input text into embeddings
     """
-    text_embeddings = st.session_state.embedding_function([text])
+    text_embeddings = st.session_state.embedding_function.compute_source_embeddings([text])
     return text_embeddings
 
 
@@ -389,17 +370,15 @@ def create_projections():
     """
     Transforms document embeddings into projections
     """
-    if st.session_state.collection is None:
+    if st.session_state.table is None:
         return
 
     # Get documents and embeddings
     with st.spinner("Retrieving document and embeddings"):
-        res = st.session_state.collection.get(
-            include=['documents', 'embeddings']
-        )
-        st.session_state.ids = res['ids']
-        st.session_state.embeddings = np.array(res['embeddings'])
-        st.session_state.documents = res['documents']
+        res = st.session_state.table.to_pandas()
+        st.session_state.ids = res['id'].tolist()
+        st.session_state.embeddings = res['embeddings'].tolist()
+        st.session_state.documents = res['document'].tolist()
 
     # Fit projection transform
     with st.spinner("Fitting embeddings"):
@@ -426,6 +405,9 @@ def plot_projections(df_projs):
     """
     Generates a 2D or 3D plot of embedding projections
     """
+    if uploaded_file is None:
+        return
+
     fig = go.Figure()
     for category in df['category'].unique():
         df_cat = df_projs[df_projs['category'] == category]
@@ -443,7 +425,7 @@ def plot_projections(df_projs):
                     'symbol': category_settings['symbol'],
                     'size': category_settings['size'],
                     'line_width': 0
-				},
+                },
                 hoverinfo='text',
                 text=df_cat['document_cleaned']
             )
@@ -462,7 +444,7 @@ def plot_projections(df_projs):
                     'symbol': category_settings['symbol'],
                     'size': category_settings['size'],
                     'line_width': 0
-				},
+                },
                 hoverinfo='text',
                 text=df_cat['document_cleaned']
             )
@@ -476,11 +458,11 @@ def plot_projections(df_projs):
             'xanchor': 'center'
         },
         legend={
-			'x': 0.5,
+            'x': 0.5,
             'xanchor': "center",
             'yanchor': "bottom",
             'orientation': "h"
-		}
+        }
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -608,7 +590,7 @@ st.set_page_config(
         'Get Help': 'https://github.com/JGalego/RAGmap',
         'Report a bug': "https://github.com/JGalego/RAGmap/issues",
         'About': """
-RAGmap is a simple RAG visualization tool for exploring document chunks and queries in embedding space.
+RAGmap [LanceDB edition] is a simple RAG visualization tool for exploring document chunks and queries in embedding space.
 
 It was inspired by DeepLearning.ai's short course on [Advanced Retrieval for AI with Chroma](https://www.deeplearning.ai/short-courses/advanced-retrieval-for-ai/) and Gabriel Chua's award-winning [RAGxplorer 🦙🦺](https://github.com/gabrielchua/RAGxplorer).
 
@@ -668,8 +650,8 @@ model_provider = st.radio(
     label="Model Provider",
     options=[
         "Amazon Bedrock ⛰️",
-        "HuggingFace 🤗",
-        "OpenAI ֎"
+        "OpenAI ֎",
+        "HuggingFace 🤗"
     ],
     horizontal=True,
     index=0,
@@ -684,8 +666,8 @@ if model_provider == "Amazon Bedrock ⛰️":
         options=list_embedding_models(),
         index=0,
         format_func=lambda option: f"{option['modelName']} ({option['modelId']})",
-        key="embedding_model",
         on_change=reset,
+        key="embedding_model",
         help="The model that turns information (text, image, &c.) \
                 into dense vector representations (embeddings)",
     )
@@ -693,11 +675,7 @@ if model_provider == "Amazon Bedrock ⛰️":
 elif model_provider == "OpenAI ֎":
     embedding_model = st.selectbox(
         label="Embedding Model",
-        options=[
-            "text-embedding-ada-002",
-            "text-embedding-3-small",
-            "text-embedding-3-large"
-		],
+        options=get_registry().get('openai').model_names(),
         on_change=reset,
         key="embedding_model",
         help="The model that turns information (text, image, &c.) \
@@ -708,8 +686,8 @@ elif model_provider == "HuggingFace 🤗":
         label="Embedding Model",
         key="embedding_model",
         on_change=reset,
-        placeholder="Enter the model name e.g. all-MiniLM-L6-v2",
-        value="all-MiniLM-L6-v2",
+        placeholder="Enter the model name e.g. sentence-transformers/all-MiniLM-L6-v2",
+        value="sentence-transformers/all-MiniLM-L6-v2",
         help="The model that turns information (text, image, &c.) \
                 into dense vector representations (embeddings)",
     )
@@ -759,15 +737,18 @@ if st.button(label="Build"):
     elif embedding_model is None:
         st.error("No model selected!")
     else:
-        if st.session_state.collection is None:
-            build_collection()
+        if st.session_state.table is None:
+            try:
+                build_vector_store()
+            except ValueError as error:
+                st.error(error)
 
         if st.session_state.projections is None:
             create_projections()
 
 if st.session_state.projections is not None:
 
-    st.markdown("### 3. Explore the embedding space 🖼️")
+    st.markdown("### 3. Explore the embedding space 👩‍🚀")
 
     df = pd.DataFrame({
         'id': [int(id) for id in st.session_state.ids],
@@ -787,6 +768,13 @@ if st.session_state.projections is not None:
         max_value=10,
         value=5,
         key='n_results',
+    )
+
+    metric_name = st.radio(
+        label="Distance Metric",
+        options=distance_metrics.keys(),
+        horizontal=True,
+        key="distance_metric",
     )
 
     retrieval_strategy = st.radio(
@@ -825,23 +813,21 @@ if st.session_state.projections is not None:
 
         # Use the query as is or expand it
         if retrieval_strategy == "Naive":
-            chroma_query = query
+            vectordb_query = [query]
         elif retrieval_strategy == "Multiple Queries":
-            chroma_query, df_query = multiple_queries_expansion(query, df_query)
+            vectordb_query, df_query = multiple_queries_expansion(query, df_query)
         elif retrieval_strategy == "Generated Answer":
-            chroma_query, df_query = generated_answer_expansion(query, df_query)
+            vectordb_query, df_query = generated_answer_expansion(query, df_query)
 
         # Search query and process results
-        results = st.session_state.collection.query(
-            query_texts=chroma_query,
-            n_results=n_results,
-            include=['documents', 'embeddings']
-        )
-
         st.session_state.retrieved_ids = []
-        for ids in results['ids']:
-            st.session_state.retrieved_ids.extend(ids)
-        st.session_state.retrieved_ids = map(int, st.session_state.retrieved_ids)
+        for query in vectordb_query:
+            query_embeddings = get_embeddings(query)
+            results = st.session_state.table.search(query=query)\
+                                            .metric(distance_metrics[metric_name])\
+                                            .limit(n_results)\
+                                            .to_pandas()
+            st.session_state.retrieved_ids.extend(results['id'].tolist())
         df.loc[df['id'].isin(st.session_state.retrieved_ids), 'category'] = "retrieved"
 
         # Append query projections
