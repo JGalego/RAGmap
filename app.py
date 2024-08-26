@@ -63,7 +63,7 @@ from langchain.text_splitter import (
     RecursiveCharacterTextSplitter
 )
 
-from langchain_community.chat_models import BedrockChat
+from langchain_aws import ChatBedrock
 
 from langchain_core.output_parsers import StrOutputParser
 
@@ -543,7 +543,7 @@ def generated_answer_expansion(user_query, df_query_original, model_id='anthropi
         ("system", system_msg),
         ("human", "\"{user_query}\"")
     ])
-    model = BedrockChat(model_id=model_id)
+    model = ChatBedrock(model_id=model_id)
     output_parser = StrOutputParser()
     chain = prompt | model | output_parser
     try:
