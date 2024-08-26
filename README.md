@@ -59,6 +59,7 @@ Enable access to the embedding ([Titan Embeddings](https://docs.aws.amazon.com/b
 1. Install dependencies
 
 	```
+	cd app
 	pip install -r requirements.txt
 	```
 

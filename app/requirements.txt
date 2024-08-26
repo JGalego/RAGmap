@@ -1,5 +1,7 @@
 boto3
 chromadb
+kaleido
+lancedb
 langchain
 langchain-aws
 numpy
