@@ -23,6 +23,8 @@ keywords = [
 dependencies = [
     "boto3",
 	"chromadb",
+	"kaleido",
+	"lancedb",
 	"langchain",
 	"numpy",
 	"opentsne",

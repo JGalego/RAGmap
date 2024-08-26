@@ -10,10 +10,13 @@ from typing import (
     Any,
     Dict,
     List,
+    Sequence,
     Tuple,
+    TypeVar,
     Union
 )
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
 
@@ -28,6 +31,13 @@ from .constants import (
     plot_settings,
     plot3d_settings
 )
+
+# Special var types
+T = TypeVar("T")
+OneOrMany = Union[T, List[T]]
+Vector = Union[Sequence[float], Sequence[int], np.ndarray]
+Embedding = Vector
+Embeddings = List[Embedding]
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +73,8 @@ def process_file(
         texts = [shape.text for slide in f.slides \
                                 for shape in slide.shapes \
                                     if hasattr(shape, "text")]
+    else:
+        raise ValueError(f"Unexpected file type: {type(f)}")
 
     # Retrieve document metadata
     # Adapted from https://stackoverflow.com/a/62022443
@@ -136,6 +148,8 @@ def plot_projections(
                 hoverinfo="text",
                 text=df_cat['document_cleaned']
             )
+        else:
+            raise ValueError(f"Invalid number of components (Got: {n_components}, Expected: [2,3])")
         fig.add_trace(trace)
 
     fig.update_layout(

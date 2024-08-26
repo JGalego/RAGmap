@@ -23,50 +23,33 @@ A simple Python module to help visualize document chunks and queries in embeddin
 """
 
 import logging
-import uuid
 
 from textwrap import wrap
 from typing import (
     Any,
     Dict,
     List,
-    Optional,
-    TypeVar,
     Union
 )
 
-import boto3
-import chromadb
 import langchain
 import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
 
-from pydantic import BaseModel
-
-# Embedding functions
-from chromadb.utils.embedding_functions import (
-    AmazonBedrockEmbeddingFunction,
-    OpenAIEmbeddingFunction,
-    SentenceTransformerEmbeddingFunction
-)
-
 from .constants import (
-	ModelProvider,
     DimensionReduction,
     IndexCategory,
     wrap_width
 )
 
+from .databases import VectorDatabase
+
 from .utils import (
-	process_file,
+    process_file,
     plot_projections
 )
 
-T = TypeVar("T")
-OneOrMany = Union[T, List[T]]
-
-# Log initialization
 logger = logging.getLogger(__name__)
 
 class RAGmapError(Exception):
@@ -74,63 +57,18 @@ class RAGmapError(Exception):
     Raised any time RAGmap fails.
     """
 
-class RAGmap(BaseModel):
+class RAGmap():
     """
     RAGmap class for visualizing and exploring embeddings.
     """
-    text_splitter: Any
-    embedding_model: str
-    provider: ModelProvider
-    boto3_sess_args: Union[Dict, None] = None
-    embed_func_kwargs: Union[Dict, None] = None
-    collection_metadata: Union[Dict, None] = None
-    _embedding_function: Optional[chromadb.api.types.EmbeddingFunction] = None
-    _vectordb: Optional[chromadb.Collection] = None
-    _last_id: int = 0
 
-    def __init__(self, **data):
+    def __init__(self, text_splitter: Any, vectordb: VectorDatabase):
         logger.info("Initializing RAGmap")
-        super().__init__(**data)
-        self._init_embed_func()
-        self._init_vect_store()
+        self.text_splitter = text_splitter
+        self.vectordb = vectordb
 
-    def _init_embed_func(self) -> None:
-        """
-        Defines the embedding function based on the selected model provider.
-        """
-        logger.info("Setting embedding function for provider %s", self.provider.value)
-        if self.embed_func_kwargs is None:
-            self.embed_func_kwargs = {}
-        if self.provider == ModelProvider.AMAZON_BEDROCK:
-            if self.boto3_sess_args is None:
-                self.boto3_sess_args = {}
-            self._embedding_function = AmazonBedrockEmbeddingFunction(
-                session=boto3.Session(**self.boto3_sess_args),
-                model_name=self.embedding_model,
-                **self.embed_func_kwargs
-            )
-        elif self.provider == ModelProvider.HUGGING_FACE:
-            self._embedding_function = SentenceTransformerEmbeddingFunction(
-                model_name=self.embedding_model,
-                **self.embed_func_kwargs
-            )
-        elif self.provider == ModelProvider.OPENAI:
-            self._embedding_function = OpenAIEmbeddingFunction(
-                model_name=self.embedding_model,
-                **self.embed_func_kwargs
-            )
-
-    def _init_vect_store(self) -> None:
-        """
-        Initializes the vector data store.
-        """
-        logger.info("Creating vector store")
-        chroma_client = chromadb.Client()
-        self._vectordb = chroma_client.create_collection(
-            name=uuid.uuid4().hex,
-            embedding_function=self._embedding_function,
-            metadata=self.collection_metadata
-        )
+        # Use to track the last indexed document
+        self._last_id = 0
 
     def _split_text(
         self,
@@ -162,7 +100,7 @@ class RAGmap(BaseModel):
 
         # Store everything in the vector database
         logger.info("Storing data in the vector database")
-        self._vectordb.add(
+        self.vectordb.add(
             ids=list(map(str, range(self._last_id, self._last_id + len(chunks)))),
             documents=chunks,
             metadatas=[metadata] * len(chunks)
@@ -176,38 +114,6 @@ class RAGmap(BaseModel):
         for input in inputs:  # pylint: disable=redefined-builtin
             self.load_file(input)
 
-    def embed(
-        self,
-        input: OneOrMany[str]  # pylint: disable=redefined-builtin
-	):
-        """Converts incoming texts into embeddings."""
-        return self._embedding_function(input=input)
-
-    def query(  # pylint: disable=too-many-arguments
-        self,
-        query_embeddings: Union[OneOrMany[chromadb.api.types.Embedding], \
-                          OneOrMany[np.ndarray], \
-                          None] = None,
-        query_texts: Union[OneOrMany[str],None] = None,
-        n_results: int = 10,
-        where: Union[chromadb.api.types.Where, None] = None,
-        where_document: Union[chromadb.api.types.WhereDocument, None] = None):
-        """
-        Returns similar entries in the vector database for provided embeddings or texts.
-        """
-        return self._vectordb.query(
-            query_texts=query_texts,
-            query_embeddings=query_embeddings,
-            n_results=n_results,
-            where=where,
-            where_document=where_document,
-            include=[
-                'documents',
-                'embeddings',
-                'metadatas'
-            ]
-        )
-
     def _fit_transform(
         self,
         dimension_reduction: DimensionReduction = DimensionReduction.UMAP,
@@ -217,7 +123,7 @@ class RAGmap(BaseModel):
         Returns a dimensionality reduction transform fitted to the embedding collection.
         """
         logger.info("Retrieving vectors from datastore")
-        embeddings = np.array(self._vectordb.get(include=['embeddings'])['embeddings'])
+        embeddings = np.array(self.vectordb.get(include=['embeddings'])['embeddings'])
         logger.info("Fitting %iD %s transform to embeddings", \
                     n_components, dimension_reduction.value.__name__)
         return dimension_reduction.value(
@@ -234,7 +140,7 @@ class RAGmap(BaseModel):
         Uses dimensionality reduction techniques to project an embedding collection.
         """
         embeddings = np.array(
-            self._vectordb.get(include=['embeddings'])['embeddings']
+            self.vectordb.get(include=['embeddings'])['embeddings']
         )
         logger.info("Generating %iD %s projections", \
                     n_components, dimension_reduction.value.__name__)
@@ -255,7 +161,7 @@ class RAGmap(BaseModel):
             f"Unsupported number of components (Got: {n_components}, Expected: 2 or 3)"
 
         # Retrieve data from vector store
-        data = self._vectordb.get(
+        data = self.vectordb.get(
             include=['documents']
         )
         ids = data['ids']
@@ -265,7 +171,7 @@ class RAGmap(BaseModel):
         if dimension_reduction_kwargs is None:
             dimension_reduction_kwargs = {}
         emb_projs, dim_redux = self.create_projections(
-			dimension_reduction,
+            dimension_reduction,
             n_components,
             **dimension_reduction_kwargs
         )
@@ -274,7 +180,7 @@ class RAGmap(BaseModel):
         if query is not None:
             logger.info("Running query\n%s", query)
             retrieved_ids = []
-            for result in self.query(**query)['ids']:
+            for result in self.vectordb.query(**query)['ids']:
                 retrieved_ids.extend(map(int, result))
         else:
             retrieved_ids = []
@@ -300,7 +206,7 @@ class RAGmap(BaseModel):
         if query is not None:
             query_embs = query.get(
                 'query_embeddings', 
-                self.embed(
+                self.vectordb.embed(
                     [query['query_texts']] \
                         if isinstance(query['query_texts'], str) \
                         else query['query_texts']
@@ -313,15 +219,15 @@ class RAGmap(BaseModel):
                 'z': query_projs[:, 2] if n_components == 3 else None,
                 'document_cleaned': query.get('query_texts', None),
                 'category': [IndexCategory.QUERY] + \
-                    		[IndexCategory.SUB_QUERY] * (len(query_projs) - 1)
+                            [IndexCategory.SUB_QUERY] * (len(query_projs) - 1)
             })
             df = pd.concat([df, df_query], axis=0)
 
-		# Create visualization
+        # Create visualization
         return plot_projections(
             df,
-            self.provider,
-            self.embedding_model,
+            self.vectordb.provider,
+            self.vectordb.model,
             dimension_reduction,
             n_components
         )
