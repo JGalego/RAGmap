@@ -599,7 +599,7 @@ It was inspired by DeepLearning.ai's short course on [Advanced Retrieval for AI 
     }
 )
 
-st.title("RAGMap 🗺️🔍")
+st.html("<h1>RAGMap<small>LanceDB edition</small>🗺️🔍</h1>")
 st.text("From meaning to vectors and back...")
 
 # Initialize session state
