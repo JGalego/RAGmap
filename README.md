@@ -14,7 +14,7 @@ RAGmap supports the following features:
 
 * Multiple vector stores
 	- ChromaDB
-	- LanceDB (NEW!)
+	- LanceDB
 * Multiple document formats 📄
 	- `PDF`
 	- `DOCX`
@@ -26,7 +26,8 @@ RAGmap supports the following features:
 		- [Cohere Embed English](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html)
 		- [Cohere Embed Multilingual](https://aws.amazon.com/blogs/aws/amazon-bedrock-now-provides-access-to-cohere-command-light-and-cohere-embed-english-and-multilingual-models/)
 	- Hugging Face 🤗
-	- OpenAI ֎ (NEW!)
+	- OpenAI ֎
+	- Google GenAI 🔵🔴🟡🟢 (NEW!)
 * Dimensionality reduction (2D and 3D)
 	- [UMAP](https://umap-learn.readthedocs.io/en/latest/)
 	- [t-SNE](https://opentsne.readthedocs.io/en/stable/)
@@ -36,8 +37,6 @@ RAGmap supports the following features:
 	- Generated Answers (HyDE)
 	- Multiple Queries
 * ... and more!
-
-☝️⚠️ **Important notice:** As of January 2024, chromadb's `AmazonBedrockEmbeddingFunction` only works with Titan models. Feel free to upvote this [PR](https://github.com/chroma-core/chroma/pull/1675) to add support for [Cohere Embed models](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html).
 
 <img src="images/ragmap.gif" width="75%"/>
 
@@ -65,8 +64,11 @@ Enable access to the embedding ([Titan Embeddings](https://docs.aws.amazon.com/b
 	# ChromaDB
 	streamlit run app.py
 
-	# LanceDB (NEW!) 🧪
+	# LanceDB
 	streamlit run app_lancedb.py
+
+	# 5-day GenAI Edition (NEW!) 🧪
+	streamlit run app_5dgai.py
 	```
 
 3. Point your browser to http://localhost:8501

@@ -1,8 +1,12 @@
 boto3
 chromadb
+google-genai
+google-generativeai
 lancedb
 langchain
 langchain-aws
+langchain-google-genai
+langchain-openai
 numpy
 openai
 opentsne
@@ -15,4 +19,3 @@ scikit-learn
 sentence_transformers
 streamlit
 umap-learn
-pysqlite3-binary
