@@ -22,6 +22,7 @@ import chromadb
 
 from chromadb.utils.embedding_functions import (  # pylint: disable=no-name-in-module
     AmazonBedrockEmbeddingFunction,
+    GoogleGenerativeAiEmbeddingFunction,
     OpenAIEmbeddingFunction,
     SentenceTransformerEmbeddingFunction
 )
@@ -40,8 +41,6 @@ class VectorDatabase(ABC):
     """
     Abstract class for vector databases.
     """
-
-    name = uuid.uuid4().hex
 
     @abstractmethod
     def __init__(
@@ -103,6 +102,7 @@ class ChromaDb(VectorDatabase):
     """
 
     def __init__(self, model, provider, embed_func_kwargs = None, metadata = None):
+        self.name = uuid.uuid4().hex
         self.model = model
         self.provider = provider
         self.embed_func_kwargs = embed_func_kwargs
@@ -128,6 +128,11 @@ class ChromaDb(VectorDatabase):
             boto3_sess_args = self.embed_func_kwargs.pop('boto3_sess_args', {})
             self._embed_func = AmazonBedrockEmbeddingFunction(
                 session=boto3.Session(**boto3_sess_args),
+                model_name=self.model,
+                **self.embed_func_kwargs
+            )
+        elif self.provider == ModelProvider.GOOGLE_GENAI:
+            self._embed_func = GoogleGenerativeAiEmbeddingFunction(
                 model_name=self.model,
                 **self.embed_func_kwargs
             )

@@ -23,6 +23,7 @@ keywords = [
 dependencies = [
     "boto3",
 	"chromadb",
+	"google-generativeai",
 	"kaleido",
 	"lancedb",
 	"langchain",

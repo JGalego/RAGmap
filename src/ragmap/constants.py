@@ -16,6 +16,7 @@ class ModelProvider(Enum):
     Supported embedding model providers.
     """
     AMAZON_BEDROCK = "Amazon Bedrock ⛰️"
+    GOOGLE_GENAI = "Google GenAI 🧠"
     HUGGING_FACE = "HuggingFace 🤗"
     OPENAI = "OpenAI"
 
